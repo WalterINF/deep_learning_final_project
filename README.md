@@ -11,7 +11,7 @@ Repositório do projeto final de AGL10225 -  Aprendizado Por Reforço
 
 Estado: [x, y, theta, beta, alpha*, [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14]]
     
-
+![veiculo com raycasts](./veiculo_com_raycast.png)
 
 x, y: posição do veiculo no mapa.
 theta: ângulo de orientação do veiculo.

@@ -109,7 +109,6 @@ class ArticulatedVehicle():
         self.width = approx_width
         self.height = approx_length
 
-
         # Variáveis da simulação (mudam a cada passo)
         self.position_x_trator = 10.0
         self.position_y_trator = 10.0
@@ -120,8 +119,6 @@ class ArticulatedVehicle():
         self.raycasts = dict[str, Raycast]()
         
         self.initialize_raycasts()
-
-
 
     def initialize_raycasts(self):
         trailer_position_x = self.position_x_trator - self.distancia_eixo_traseiro_trailer_quinta_roda * math.cos(self.beta_trator)
@@ -257,14 +254,27 @@ class ArticulatedVehicle():
     def update_physical_properties(self, 
                                     position_x: float, 
                                     position_y: float, 
+                                    velocity: float,
                                     theta: float,
                                     beta: float,
                                     alpha: float):
         self.position_x_trator = position_x
         self.position_y_trator = position_y
-        self.theta_trator = theta
+        self.velocity_trator = velocity
+        self.set_theta(theta)
         self.beta_trator = beta
         self.alpha_trator = alpha
+
+    def set_theta(self, theta: float):
+        """atualiza o ângulo de orientação do trator fazendo clipping para o intervalo [-pi, pi]"""
+        new_theta = 0.0
+        if theta > math.pi:
+            new_theta = theta - 2 * math.pi
+        elif theta < -math.pi:
+            new_theta = theta + 2 * math.pi
+        else:
+            new_theta = theta
+        self.theta_trator = new_theta
 
     def get_bounding_box_tractor(self) -> BoundingBox:
         """
@@ -308,21 +318,31 @@ class ArticulatedVehicle():
 
     def get_wheels_bounding_boxes(self) -> list[BoundingBox]:
         # Center of the front axle (from rear axle by 'distancia_eixo_dianteiro_quinta_roda')
-        axle_center_x = self.position_x_trator + self.distancia_eixo_dianteiro_quinta_roda * math.cos(self.theta_trator)
-        axle_center_y = self.position_y_trator + self.distancia_eixo_dianteiro_quinta_roda * math.sin(self.theta_trator)
+        front_axle_center_x = self.position_x_trator + self.distancia_eixo_dianteiro_quinta_roda * math.cos(self.theta_trator)
+        front_axle_center_y = self.position_y_trator + self.distancia_eixo_dianteiro_quinta_roda * math.sin(self.theta_trator)
+
+        rear_axle_center_x = self.position_x_trator + self.distancia_eixo_traseiro_quinta_roda * math.cos(self.theta_trator)
+        rear_axle_center_y = self.position_y_trator + self.distancia_eixo_traseiro_quinta_roda * math.sin(self.theta_trator)
 
         # Lateral offsets (half the tractor width) perpendicular to the heading
         half_width = self.largura_trator / 2.0
         perpendicular_angle = self.theta_trator + math.pi / 2.0
 
-        front_left_wheel_position_x = axle_center_x + half_width * math.cos(perpendicular_angle)
-        front_left_wheel_position_y = axle_center_y + half_width * math.sin(perpendicular_angle)
-        front_right_wheel_position_x = axle_center_x - half_width * math.cos(perpendicular_angle)
-        front_right_wheel_position_y = axle_center_y - half_width * math.sin(perpendicular_angle)
+        front_left_wheel_position_x = front_axle_center_x + half_width * math.cos(perpendicular_angle)
+        front_left_wheel_position_y = front_axle_center_y + half_width * math.sin(perpendicular_angle)
+        front_right_wheel_position_x = front_axle_center_x - half_width * math.cos(perpendicular_angle)
+        front_right_wheel_position_y = front_axle_center_y - half_width * math.sin(perpendicular_angle)
+
+        rear_left_wheel_position_x = rear_axle_center_x + half_width * math.cos(perpendicular_angle)
+        rear_left_wheel_position_y = rear_axle_center_y + half_width * math.sin(perpendicular_angle)
+        rear_right_wheel_position_x = rear_axle_center_x - half_width * math.cos(perpendicular_angle)
+        rear_right_wheel_position_y = rear_axle_center_y - half_width * math.sin(perpendicular_angle)
 
         return [
             BoundingBox(front_left_wheel_position_x, front_left_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
             BoundingBox(front_right_wheel_position_x, front_right_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
+            BoundingBox(rear_left_wheel_position_x, rear_left_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
+            BoundingBox(rear_right_wheel_position_x, rear_right_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
         ]
 
     def check_collision(self, entity: MapEntity) -> bool:
@@ -337,12 +357,14 @@ class Map:
     parking_goal: MapEntity
     size_x: float
     size_y: float
+    spawn_margin: float
 
     def __init__(self, size: tuple[float, float], entities: list[MapEntity] = None):
         self.size_x = size[0]
         self.size_y = size[1]
         self.entities = []
         self.parking_goal = None
+        self.spawn_margin = min(10.0, self.size_x/2, self.size_y/2)
         if entities is not None:
             for entity in entities:
                 self.add_entity(entity)
@@ -371,12 +393,12 @@ class Map:
         return (self.size_x, self.size_y)
 
     def get_random_start_position(self, vehicle: ArticulatedVehicle, max_attempts: int = 100) -> tuple[float, float]:
-        """Retorna uma posição aleatória válida dentro do mapa""" 
+        """Retorna uma posição aleatória válida dentro do mapa com margem de segurança de 10 metros""" 
         ## faz várias tentativas de encontrar uma posição válida
         for _ in range(max_attempts):
             valid_position = True
-            x = random.uniform(10, self.size_x -10)
-            y = random.uniform(10, self.size_y -10)
+            x = random.uniform(self.spawn_margin, self.size_x -self.spawn_margin)
+            y = random.uniform(self.spawn_margin, self.size_y -self.spawn_margin)
             for entity in self.entities:
                 if(vehicle.check_collision(entity)):
                     valid_position = False
@@ -384,6 +406,11 @@ class Map:
             if(valid_position):
                 return x, y
         return None
+
+    def add_goal_randomly(self):
+        self.parking_goal = MapEntity(position_x=random.uniform(self.spawn_margin, self.size_x -self.spawn_margin), position_y=random.uniform(self.spawn_margin, self.size_y -self.spawn_margin), width=15.0, height=24.0, theta=math.radians(random.uniform(0, 360)), type=MapEntity.ENTITY_PARKING_GOAL)
+        self.add_entity(self.parking_goal)
+        self.entities.append(self.parking_goal)
 
 
 

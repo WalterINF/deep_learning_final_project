@@ -8,6 +8,10 @@ import math
 from pygame import gfxdraw
 from Simulation import MapEntity
 from Simulation import ArticulatedVehicle
+from pygame.font import Font
+
+# Initialize pygame.font before creating Font objects
+pygame.font.init()
 
 color_and_fill_mappings = {
     MapEntity.ENTITY_WALL: ((200, 0, 0), True), ## vermelho
@@ -15,6 +19,8 @@ color_and_fill_mappings = {
     MapEntity.ENTITY_PARKING_SLOT: ((0, 0, 0), True), ## preto
     MapEntity.ENTITY_PARKING_GOAL: ((0, 200, 0), True), ## verde
 }
+
+font = Font(None, 20)
 
 
 def to_rgb_array(
@@ -103,6 +109,17 @@ def to_rgb_array(
             line_end_position = (raycast_position[0] + raycast_length * math.cos(raycast_angle), raycast_position[1] + raycast_length * math.sin(raycast_angle))
             gfxdraw.line(surface, int(raycast_position[0]), int(raycast_position[1]), int(line_end_position[0]), int(line_end_position[1]), (0, 0, 255))
             gfxdraw.filled_circle(surface, int(line_end_position[0]), int(line_end_position[1]), int(0.5 * scale_x), (0, 0, 255))
+
+    # desenha ações na tela
+    if vehicle.get_velocity() is not None:
+        velocity_text = f"Velocity: {vehicle.get_velocity():.2f}"
+        velocity_surface = font.render(velocity_text, True, (0, 0, 0))
+        surface.blit(velocity_surface, (10, 10))
+
+    if vehicle.get_alpha() is not None:
+        alpha_text = f"Alpha: {vehicle.get_alpha():.2f}"
+        alpha_surface = font.render(alpha_text, True, (0, 0, 0))
+        surface.blit(alpha_surface, (10, 30))
 
     # Extrai os pixels como bytes em ordem RGB
     raw_bytes = pygame.image.tostring(surface, "RGB")

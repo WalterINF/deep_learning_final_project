@@ -61,8 +61,8 @@ def load_map_from_json(filename: str) -> Map:
     return loaded_map
 
 def create_default_map() -> Map:
-    height = 90.0
-    width = 90.0
+    height = 45.0
+    width = 45.0
     width_wall = 2.0
     width_parking_slot = 15.0
     height_parking_slot = 24.0
@@ -81,5 +81,5 @@ def create_default_map() -> Map:
       #  map.add_entity(MapEntity(position_x=width/2 + i * 1.5 * width_parking_slot, position_y=height/2, width=width_parking_slot, height=height_parking_slot, theta=math.radians(45), type=MapEntity.ENTITY_PARKING_SLOT))
 
     # vaga de estacionamento
-    map.add_entity(MapEntity(position_x= 15, position_y= 75, width=width_parking_slot, height=height_parking_slot, theta=math.radians(0), type=MapEntity.ENTITY_PARKING_GOAL))
+    map.add_goal_randomly()
     return map

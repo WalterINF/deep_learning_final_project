@@ -123,7 +123,75 @@ class BoundingBox:
         Returns:
             bool: True se houver colisão, False caso contrário
         """
-        pass
+        # Oriented Bounding Box (OBB) intersection via Separating Axis Theorem (SAT)
+        # Local axes for each box (unit vectors)
+        cos1 = math.cos(self.theta)
+        sin1 = math.sin(self.theta)
+        cos2 = math.cos(other.theta)
+        sin2 = math.sin(other.theta)
+
+        # Axes for self
+        u1 = (cos1, sin1)          # axis along width
+        v1 = (-sin1, cos1)         # axis along height
+        # Axes for other
+        u2 = (cos2, sin2)
+        v2 = (-sin2, cos2)
+
+        half_w1 = self.width / 2.0
+        half_h1 = self.height / 2.0
+        half_w2 = other.width / 2.0
+        half_h2 = other.height / 2.0
+
+        # Vector between centers
+        center_dx = other.position_x - self.position_x
+        center_dy = other.position_y - self.position_y
+
+        def dot(a: tuple[float, float], b: tuple[float, float]) -> float:
+            return a[0] * b[0] + a[1] * b[1]
+
+        axes = [u1, v1, u2, v2]
+        eps = 1e-9
+
+        for axis in axes:
+            # Projection radii of each box onto current axis
+            r1 = half_w1 * abs(dot(u1, axis)) + half_h1 * abs(dot(v1, axis))
+            r2 = half_w2 * abs(dot(u2, axis)) + half_h2 * abs(dot(v2, axis))
+
+            # Distance between centers projected onto axis
+            dist = abs(center_dx * axis[0] + center_dy * axis[1])
+
+            # If there is a separating axis, boxes do not intersect
+            if dist > (r1 + r2) + eps:
+                return False
+
+        # No separating axis found -> boxes intersect
+        return True
+
+    def contains_point(self, point: tuple[float, float]) -> bool:
+        """verifica se um ponto está dentro da bounding box"""
+        # Transform point to this box's local coordinates (translate, then rotate by -theta)
+        dx = point[0] - self.position_x
+        dy = point[1] - self.position_y
+
+        cos_theta = math.cos(-self.theta)
+        sin_theta = math.sin(-self.theta)
+
+        local_x = dx * cos_theta - dy * sin_theta
+        local_y = dx * sin_theta + dy * cos_theta
+
+        half_w = self.width / 2.0
+        half_h = self.height / 2.0
+        eps = 1e-9
+
+        return (-half_w - eps) <= local_x <= (half_w + eps) and (-half_h - eps) <= local_y <= (half_h + eps)
+
+    def contains_bounding_box(self, other: 'BoundingBox') -> bool:
+        """verifica se uma bounding box está dentro da bounding box"""
+        # All 4 corners of the other OBB must be inside this OBB
+        for corner in other.get_corners():
+            if not self.contains_point(corner):
+                return False
+        return True
     
     def get_corners(self) -> list[tuple[float, float]]:
         """Calcula os quatro cantos da bounding box em coordenadas globais"""

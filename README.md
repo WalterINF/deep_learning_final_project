@@ -24,12 +24,14 @@ O agente deve posicionar o trailer sobre o objetivo, que é uma vaga de estacion
 
 #### Espaço de observação (o que o agente observa)
 
-Estado: [x, y, theta, beta, alpha*, [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14]], onde:
+Estado: [x, y, theta, beta, alpha*, [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14], obj_x, obj_y, obj_theta], onde:
 * x, y: posição do veiculo no mapa.
 * theta: ângulo de orientação do veiculo.
 * beta: ângulo relativo entre o trator e o trailer.
 * alpha*: ângulo de esterçamento do trator.
 * r1, ..., r14: raycasts posicionados com origem no veiculo.
+* obj_x, obj_y: posição do objetivo no mapa.
+* obj_theta: ângulo de orientação do objetivo.
     
 ![veiculo com raycasts](veiculo_com_os_raycast.png)
 
@@ -52,7 +54,6 @@ Controle: [v, alpha], onde:
 * objetivo atingido: veiculo estacionado no ponto de destino.
 
 
-
 ### Parâmetros de simulação (configurações do ambiente)
 
 limites de angulo de esterçamento do trator: +-28 graus.
@@ -60,7 +61,6 @@ limites de taxa de esterçamento do trator: +-10 graus/s.
 limites de velocidade do trator: 20km/h ou 5m/s.
 angulo de canivete: 65 graus.
 limite de visão do sensor de distância: 150 metros.
-
 
 
 //todo:

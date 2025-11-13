@@ -2,6 +2,7 @@ from collisions import BoundingBox
 import math
 from collisions import Raycast
 from casadi import cos, sin
+import random
 
 
 class MapEntity:
@@ -150,7 +151,7 @@ class ArticulatedVehicle():
                 self.raycasts[raycast_name].theta = self.theta_trator + angle_offset
 
                 for entity in entities:
-                    if entity.type == MapEntity.ENTITY_WALL:
+                    if entity.type == MapEntity.ENTITY_WALL or entity.type == MapEntity.ENTITY_PARKING_SLOT:
                         collision_distance = self.raycasts[raycast_name].check_collision(entity.get_bounding_box())
                         if collision_distance is not None:
                             min_distance = min(min_distance, collision_distance)
@@ -163,7 +164,7 @@ class ArticulatedVehicle():
                 self.raycasts[raycast_name].theta = self.get_trailer_theta() + angle_offset 
 
                 for entity in entities:
-                    if entity.type == MapEntity.ENTITY_WALL:
+                    if entity.type == MapEntity.ENTITY_WALL or entity.type == MapEntity.ENTITY_PARKING_SLOT:
                         collision_distance = self.raycasts[raycast_name].check_collision(entity.get_bounding_box())
                         if collision_distance is not None:
                             min_distance = min(min_distance, collision_distance)
@@ -323,66 +324,68 @@ class ArticulatedVehicle():
             BoundingBox(front_left_wheel_position_x, front_left_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
             BoundingBox(front_right_wheel_position_x, front_right_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
         ]
+
+    def check_collision(self, entity: MapEntity) -> bool:
+        """Verifica se o veículo colidiu com uma entidade."""
+        target_bbox = entity.get_bounding_box()
+        return self.get_bounding_box_tractor().check_collision(target_bbox) or self.get_bounding_box_trailer().check_collision(target_bbox)
  
 
 class Map:
 
-    vehicle: ArticulatedVehicle
     entities: list[MapEntity]
+    parking_goal: MapEntity
     size_x: float
     size_y: float
 
-    color_mappings = {
-        MapEntity.ENTITY_WALL: (0, 0, 0),
-        MapEntity.ENTITY_OBSTACLE: (100, 0, 0),
-        MapEntity.ENTITY_PARKING_SLOT: (0, 100, 0),
-        MapEntity.ENTITY_PARKING_GOAL: (0, 0, 200),
-    }
-
-
-    def __init__(self, size: tuple[float, float], vehicle: ArticulatedVehicle, entities: list[MapEntity] = None):
+    def __init__(self, size: tuple[float, float], entities: list[MapEntity] = None):
         self.size_x = size[0]
         self.size_y = size[1]
         self.entities = []
-        self.vehicle = vehicle
+        self.parking_goal = None
+        if entities is not None:
+            for entity in entities:
+                self.add_entity(entity)
+
+    def get_parking_goal(self) -> MapEntity:
+        return self.parking_goal
+
+    def get_parking_goal_position(self) -> tuple[float, float]:
+        return self.parking_goal.position_x, self.parking_goal.position_y
+
+    def get_parking_goal_theta(self) -> float:
+        return self.parking_goal.theta
 
     def add_entity(self, entity: MapEntity):
-        self.entities.append(entity)
+        #if the entity is a parking goal, delete all other parking goals
+        if entity.type == MapEntity.ENTITY_PARKING_GOAL:
+            self.parking_goal = entity
+            self.entities.append(entity)
+        else:
+            self.entities.append(entity)
 
     def get_entities(self) -> list[MapEntity]:
         return self.entities
 
+    def get_size(self) -> tuple[float, float]:
+        return (self.size_x, self.size_y)
+
+    def get_random_start_position(self, vehicle: ArticulatedVehicle, max_attempts: int = 100) -> tuple[float, float]:
+        """Retorna uma posição aleatória válida dentro do mapa""" 
+        ## faz várias tentativas de encontrar uma posição válida
+        for _ in range(max_attempts):
+            valid_position = True
+            x = random.uniform(10, self.size_x -10)
+            y = random.uniform(10, self.size_y -10)
+            for entity in self.entities:
+                if(vehicle.check_collision(entity)):
+                    valid_position = False
+                    break
+            if(valid_position):
+                return x, y
+        return None
 
 
-    def move_vehicle(self, velocity: float, alpha: float, dt: float):
-        # Current state
-        x, y = self.vehicle.get_position()
-        theta = self.vehicle.get_theta()
-        beta = self.vehicle.get_beta()
-
-        # Geometry
-        D = self.vehicle.get_distancia_eixo_dianteiro_quinta_roda() - self.vehicle.get_distancia_eixo_traseiro_quinta_roda()
-        L = self.vehicle.get_distancia_eixo_traseiro_trailer_quinta_roda()
-        a = self.vehicle.get_distancia_eixo_traseiro_quinta_roda()
-
-        angular_velocity_tractor = (velocity / D) * math.tan(alpha)
-        beta_dot = angular_velocity_tractor * (1 - (alpha * cos(beta)) / L) - (velocity * sin(beta)) / L
-
-        # Kinematics
-        x_dot = velocity * math.cos(theta)
-        y_dot = velocity * math.sin(theta)
-        theta_dot = (velocity / D) * math.tan(alpha)
-        beta_dot = beta_dot = angular_velocity_tractor * (1 - (alpha * cos(beta)) / L) - (velocity * sin(beta)) / L
-
-        # Euler step
-        new_x = x + x_dot * dt
-        new_y = y + y_dot * dt
-        new_theta = theta + theta_dot * dt
-        new_beta = beta + beta_dot * dt
-
-
-        self.vehicle.update_physical_properties(new_x, new_y, new_theta, new_beta, alpha)
-        self.vehicle.update_raycasts(self.entities)
 
 
 

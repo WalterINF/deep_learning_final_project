@@ -61,11 +61,11 @@ def load_map_from_json(filename: str) -> Map:
     return loaded_map
 
 def create_default_map() -> Map:
-    height = 45.0
-    width = 45.0
+    height = 60.0
+    width = 60.0
     width_wall = 2.0
-    width_parking_slot = 15.0
-    height_parking_slot = 24.0
+    width_parking_slot = 7.0
+    height_parking_slot = 12.0
     map = Map((width, height))
     # parede esquerda
     map.add_entity(MapEntity(position_x=0, position_y=height/2, width=width_wall, height=height, theta=0, type=MapEntity.ENTITY_WALL))

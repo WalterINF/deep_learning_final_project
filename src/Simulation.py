@@ -62,24 +62,24 @@ class ArticulatedVehicle():
     ## posição do trailer é calculada a partir da posição do trator e do ângulo de articulação
 
 
-    raycast_positions_and_angle_offsets = {
-       #nome  origem     ângulo de offset
-        "r1": ("tractor", 0.0), # 0 graus
-        "r2": ("tractor", math.pi/4), # 45 graus
-        "r3": ("tractor", math.pi/2), # 90 graus
-        "r4": ("tractor", 3*math.pi/4), # 135 graus
-        "r5": ("tractor", -3*math.pi/4), # -135 graus
-        "r6": ("tractor", -math.pi/2), # -90 graus
-        "r7": ("tractor", -math.pi/4), # -45 graus
+    raycast_positions_and_angle_offsets = [
+       # (nome,   origem,    ângulo de offset)
+        ("r1", "tractor", 0.0), # 0 graus
+        #("r2", "tractor", math.pi/4), # 45 graus
+        #("r3", "tractor", math.pi/2), # 90 graus
+        #("r4", "tractor", 3*math.pi/4), # 135 graus
+        #("r5", "tractor", -3*math.pi/4), # -135 graus
+        #("r6", "tractor", -math.pi/2), # -90 graus
+        #("r7", "tractor", -math.pi/4), # -45 graus
 
-        "r8": ("trailer", math.pi/4), # 45 graus
-        "r9": ("trailer", math.pi/2), # 90 graus
-        "r10": ("trailer", 3*math.pi/4), # 135 graus
-        "r11": ("trailer", -3*math.pi/4), # -135 graus
-        "r12": ("trailer", -math.pi/2), # -90 graus
-        "r13": ("trailer", -math.pi/4), # -45 graus
-        "r14": ("trailer", math.pi), # 180 graus
-    }
+        #("r8", "trailer", math.pi/4), # 45 graus
+        #("r9", "trailer", math.pi/2), # 90 graus
+        #("r10", "trailer", 3*math.pi/4), # 135 graus
+        #("r11", "trailer", -3*math.pi/4), # -135 graus
+        #("r12", "trailer", -math.pi/2), # -90 graus
+        #("r13", "trailer", -math.pi/4), # -45 graus
+        ("r2", "trailer", math.pi), # 180 graus
+    ]
 
     MAX_RAYCAST_LENGTH = 150.0 # 10 metros
 
@@ -124,11 +124,14 @@ class ArticulatedVehicle():
         trailer_position_x = self.position_x_trator - self.distancia_eixo_traseiro_trailer_quinta_roda * math.cos(self.beta_trator)
         trailer_position_y = self.position_y_trator - self.distancia_eixo_traseiro_trailer_quinta_roda * math.sin(self.beta_trator)
 
-        for raycast_name, (origin_point, angle_offset) in self.raycast_positions_and_angle_offsets.items():
+        for raycast_name, origin_point, angle_offset in self.raycast_positions_and_angle_offsets:
             if origin_point == "tractor":
                 self.raycasts[raycast_name] = Raycast(self.position_x_trator, self.position_y_trator, self.theta_trator + angle_offset, self.MAX_RAYCAST_LENGTH)
             elif origin_point == "trailer":
                 self.raycasts[raycast_name] = Raycast(trailer_position_x, trailer_position_y, self.get_trailer_theta() + angle_offset, self.MAX_RAYCAST_LENGTH)
+
+    def get_raycast_count(self) -> int:
+        return len(self.raycasts.keys())
 
     def update_raycasts(self, entities: list[MapEntity]):
 
@@ -136,7 +139,7 @@ class ArticulatedVehicle():
         trailer_position_x = rear_axle_position[0]
         trailer_position_y = rear_axle_position[1]
 
-        for raycast_name, (origin_point, angle_offset) in self.raycast_positions_and_angle_offsets.items():
+        for raycast_name, origin_point, angle_offset in self.raycast_positions_and_angle_offsets:
             # Reset length each frame
             min_distance = self.MAX_RAYCAST_LENGTH
             # Ensure collision checks use full range for this frame (avoid using last frame's shortened length)
@@ -167,6 +170,9 @@ class ArticulatedVehicle():
                             min_distance = min(min_distance, collision_distance)
 
                 self.raycasts[raycast_name].length = min_distance
+
+    def get_raycast_lengths(self) -> list[float]:
+         return [self.raycasts[raycast_name].length for (raycast_name, _, _) in self.raycast_positions_and_angle_offsets]
 
     def get_position(self):
         return self.position_x_trator, self.position_y_trator
@@ -315,14 +321,27 @@ class ArticulatedVehicle():
         Retorna o ângulo perpendicular ao ângulo de orientação do veículo.
         """
         return self.theta_trator + math.pi / 2
-
-    def get_wheels_bounding_boxes(self) -> list[BoundingBox]:
-        # Center of the front axle (from rear axle by 'distancia_eixo_dianteiro_quinta_roda')
+    
+    def get_front_axle_position(self) -> tuple[float, float]:
         front_axle_center_x = self.position_x_trator + self.distancia_eixo_dianteiro_quinta_roda * math.cos(self.theta_trator)
         front_axle_center_y = self.position_y_trator + self.distancia_eixo_dianteiro_quinta_roda * math.sin(self.theta_trator)
-
+        return front_axle_center_x, front_axle_center_y
+    
+    def get_rear_axle_position(self) -> tuple[float, float]:
         rear_axle_center_x = self.position_x_trator + self.distancia_eixo_traseiro_quinta_roda * math.cos(self.theta_trator)
         rear_axle_center_y = self.position_y_trator + self.distancia_eixo_traseiro_quinta_roda * math.sin(self.theta_trator)
+        return rear_axle_center_x, rear_axle_center_y
+
+    def get_trailer_rear_axle_position(self) -> tuple[float, float]:
+        rear_axle_center_x = self.position_x_trator - self.distancia_eixo_traseiro_trailer_quinta_roda * math.cos(self.theta_trator - self.beta_trator)
+        rear_axle_center_y = self.position_y_trator - self.distancia_eixo_traseiro_trailer_quinta_roda * math.sin(self.theta_trator - self.beta_trator)
+        return rear_axle_center_x, rear_axle_center_y
+    
+    def get_wheels_bounding_boxes(self) -> list[BoundingBox]:
+        # Center of the front axle (from rear axle by 'distancia_eixo_dianteiro_quinta_roda')
+        front_axle_center_x, front_axle_center_y = self.get_front_axle_position()
+
+        rear_axle_center_x, rear_axle_center_y = self.get_rear_axle_position()
 
         # Lateral offsets (half the tractor width) perpendicular to the heading
         half_width = self.largura_trator / 2.0
@@ -338,11 +357,20 @@ class ArticulatedVehicle():
         rear_right_wheel_position_x = rear_axle_center_x - half_width * math.cos(perpendicular_angle)
         rear_right_wheel_position_y = rear_axle_center_y - half_width * math.sin(perpendicular_angle)
 
+        rear_axle_trailer_center_x, rear_axle_trailer_center_y = self.get_trailer_rear_axle_position()
+
+        rear_left_trailer_wheel_position_x = rear_axle_trailer_center_x + half_width * math.cos(perpendicular_angle)
+        rear_left_trailer_wheel_position_y = rear_axle_trailer_center_y + half_width * math.sin(perpendicular_angle)
+        rear_right_trailer_wheel_position_x = rear_axle_trailer_center_x - half_width * math.cos(perpendicular_angle)
+        rear_right_trailer_wheel_position_y = rear_axle_trailer_center_y - half_width * math.sin(perpendicular_angle)
+
         return [
             BoundingBox(front_left_wheel_position_x, front_left_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
             BoundingBox(front_right_wheel_position_x, front_right_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
-            BoundingBox(rear_left_wheel_position_x, rear_left_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
-            BoundingBox(rear_right_wheel_position_x, rear_right_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
+            BoundingBox(rear_left_wheel_position_x, rear_left_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator),
+            BoundingBox(rear_right_wheel_position_x, rear_right_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator),
+            BoundingBox(rear_left_trailer_wheel_position_x, rear_left_trailer_wheel_position_y, self.comprimento_roda, self.largura_roda, self.get_trailer_theta()),
+            BoundingBox(rear_right_trailer_wheel_position_x, rear_right_trailer_wheel_position_y, self.comprimento_roda, self.largura_roda, self.get_trailer_theta()),
         ]
 
     def check_collision(self, entity: MapEntity) -> bool:
@@ -408,7 +436,7 @@ class Map:
         return None
 
     def add_goal_randomly(self):
-        self.parking_goal = MapEntity(position_x=random.uniform(self.spawn_margin, self.size_x -self.spawn_margin), position_y=random.uniform(self.spawn_margin, self.size_y -self.spawn_margin), width=15.0, height=24.0, theta=math.radians(random.uniform(0, 360)), type=MapEntity.ENTITY_PARKING_GOAL)
+        self.parking_goal = MapEntity(position_x=random.uniform(self.spawn_margin, self.size_x -self.spawn_margin), position_y=random.uniform(self.spawn_margin, self.size_y -self.spawn_margin), width=7.0, height=12.0, theta=math.radians(random.uniform(0, 360)), type=MapEntity.ENTITY_PARKING_GOAL)
         self.add_entity(self.parking_goal)
         self.entities.append(self.parking_goal)
 

@@ -442,6 +442,23 @@ class Map:
         self.entities.append(self.parking_goal)
 
 
+    def place_vehicle(self, vehicle: ArticulatedVehicle):
+        start_pos = self.get_random_start_position(vehicle, max_attempts=100)
+        if start_pos is None:
+            start_x = self.size_x / 2
+            start_y = self.size_y / 2
+        else:
+            start_x, start_y = start_pos
+        start_theta = 0.0
+        start_beta = 0.0
+        start_alpha = 0.0
+        vehicle.update_physical_properties(start_x, start_y, 0.0, start_theta, start_beta, start_alpha)
+        vehicle.initialize_raycasts()
+        vehicle.update_raycasts(self.entities)
+
+
+
+
 
 
 

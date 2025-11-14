@@ -345,32 +345,33 @@ class ArticulatedVehicle():
 
         # Lateral offsets (half the tractor width) perpendicular to the heading
         half_width = self.largura_trator / 2.0
-        perpendicular_angle = self.theta_trator + math.pi / 2.0
+        perpendicular_angle_tractor = self.theta_trator + math.pi / 2.0
+        perpendicular_angle_trailer = self.get_trailer_theta() + math.pi / 2.0
 
-        front_left_wheel_position_x = front_axle_center_x + half_width * math.cos(perpendicular_angle)
-        front_left_wheel_position_y = front_axle_center_y + half_width * math.sin(perpendicular_angle)
-        front_right_wheel_position_x = front_axle_center_x - half_width * math.cos(perpendicular_angle)
-        front_right_wheel_position_y = front_axle_center_y - half_width * math.sin(perpendicular_angle)
+        front_left_wheel_position_x = front_axle_center_x + half_width * math.cos(perpendicular_angle_tractor)
+        front_left_wheel_position_y = front_axle_center_y + half_width * math.sin(perpendicular_angle_tractor)
+        front_right_wheel_position_x = front_axle_center_x - half_width * math.cos(perpendicular_angle_tractor)
+        front_right_wheel_position_y = front_axle_center_y - half_width * math.sin(perpendicular_angle_tractor)
 
-        rear_left_wheel_position_x = rear_axle_center_x + half_width * math.cos(perpendicular_angle)
-        rear_left_wheel_position_y = rear_axle_center_y + half_width * math.sin(perpendicular_angle)
-        rear_right_wheel_position_x = rear_axle_center_x - half_width * math.cos(perpendicular_angle)
-        rear_right_wheel_position_y = rear_axle_center_y - half_width * math.sin(perpendicular_angle)
+        rear_left_wheel_position_x = rear_axle_center_x + half_width * math.cos(perpendicular_angle_tractor)
+        rear_left_wheel_position_y = rear_axle_center_y + half_width * math.sin(perpendicular_angle_tractor)
+        rear_right_wheel_position_x = rear_axle_center_x - half_width * math.cos(perpendicular_angle_tractor)
+        rear_right_wheel_position_y = rear_axle_center_y - half_width * math.sin(perpendicular_angle_tractor)
 
         rear_axle_trailer_center_x, rear_axle_trailer_center_y = self.get_trailer_rear_axle_position()
 
-        rear_left_trailer_wheel_position_x = rear_axle_trailer_center_x + half_width * math.cos(perpendicular_angle)
-        rear_left_trailer_wheel_position_y = rear_axle_trailer_center_y + half_width * math.sin(perpendicular_angle)
-        rear_right_trailer_wheel_position_x = rear_axle_trailer_center_x - half_width * math.cos(perpendicular_angle)
-        rear_right_trailer_wheel_position_y = rear_axle_trailer_center_y - half_width * math.sin(perpendicular_angle)
+        rear_left_trailer_wheel_position_x = rear_axle_trailer_center_x + half_width * math.cos(perpendicular_angle_trailer)
+        rear_left_trailer_wheel_position_y = rear_axle_trailer_center_y + half_width * math.sin(perpendicular_angle_trailer)
+        rear_right_trailer_wheel_position_x = rear_axle_trailer_center_x - half_width * math.cos(perpendicular_angle_trailer)
+        rear_right_trailer_wheel_position_y = rear_axle_trailer_center_y - half_width * math.sin(perpendicular_angle_trailer)
 
         return [
             BoundingBox(front_left_wheel_position_x, front_left_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
             BoundingBox(front_right_wheel_position_x, front_right_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
             BoundingBox(rear_left_wheel_position_x, rear_left_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator),
             BoundingBox(rear_right_wheel_position_x, rear_right_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator),
-            BoundingBox(rear_left_trailer_wheel_position_x, rear_left_trailer_wheel_position_y, self.comprimento_roda, self.largura_roda, self.get_trailer_theta()),
-            BoundingBox(rear_right_trailer_wheel_position_x, rear_right_trailer_wheel_position_y, self.comprimento_roda, self.largura_roda, self.get_trailer_theta()),
+            BoundingBox(rear_left_trailer_wheel_position_x, rear_left_trailer_wheel_position_y, self.comprimento_roda, self.largura_roda, -self.get_trailer_theta()),
+            BoundingBox(rear_right_trailer_wheel_position_x, rear_right_trailer_wheel_position_y, self.comprimento_roda, self.largura_roda, -self.get_trailer_theta()),
         ]
 
     def check_collision(self, entity: MapEntity) -> bool:

@@ -27,6 +27,8 @@ def to_rgb_array(
     map: Map,
     vehicle: ArticulatedVehicle | None = None,
     img_size: tuple[int, int] = None,
+    goal_distance: float = None,
+    goal_direction: float = None,
 ) -> list[list[list[int]]]:
     """Gera uma imagem RGB do mapa e suas entidades.
 
@@ -120,6 +122,16 @@ def to_rgb_array(
         alpha_text = f"Alpha: {vehicle.get_alpha():.2f}"
         alpha_surface = font.render(alpha_text, True, (0, 0, 0))
         surface.blit(alpha_surface, (10, 30))
+
+    if goal_distance is not None:
+        goal_distance_text = f"Goal Distance: {goal_distance:.2f}"
+        goal_distance_surface = font.render(goal_distance_text, True, (0, 0, 0))
+        surface.blit(goal_distance_surface, (10, 50))
+
+    if goal_direction is not None:
+        goal_direction_text = f"Goal Direction: {goal_direction:.2f}"
+        goal_direction_surface = font.render(goal_direction_text, True, (0, 0, 0))
+        surface.blit(goal_direction_surface, (10, 70))
 
     # Extrai os pixels como bytes em ordem RGB
     raw_bytes = pygame.image.tostring(surface, "RGB")

@@ -11,6 +11,7 @@ class MapEntity:
     ENTITY_OBSTACLE = "obstacle"
     ENTITY_PARKING_SLOT = "parking_slot"
     ENTITY_PARKING_GOAL = "parking_goal"
+    ENTITY_START = "start"
 
     position_x: float 
     position_y: float
@@ -32,23 +33,14 @@ class MapEntity:
 
 class ArticulatedVehicle():
 
+    ## ============ propriedades do veículo ============
+
     ## propriedades do trator
     comprimento_trator: float
     distancia_eixo_traseiro_quinta_roda: float
     distancia_eixo_dianteiro_quinta_roda: float
     distancia_frente_quinta_roda: float
     largura_trator: float
-
-    ## posição do trator
-    position_x_trator: float
-    position_y_trator: float
-    theta_trator: float
-    beta_trator: float
-
-    ## raycasts
-    raycasts: dict[str, Raycast]
-
-    # Trailer
 
     ## propriedades do trailer
     comprimento_trailer: float
@@ -59,26 +51,32 @@ class ArticulatedVehicle():
     comprimento_roda: float
     angulo_maximo_articulacao: float
 
-    ## posição do trailer é calculada a partir da posição do trator e do ângulo de articulação
+    ## ============ propriedades físicas do veículo ============
 
+    ## posição do trator
+    position_x_trator: float # posição x do trator
+    position_y_trator: float # posição y do trator
+    theta_trator: float # ângulo de orientação do trator
+    beta_trator: float # ângulo de articulação do trator-trailer
+    raycasts: dict[str, Raycast] # raycasts do trator
 
     raycast_positions_and_angle_offsets = [
        # (nome,   origem,    ângulo de offset)
         ("r1", "tractor", 0.0), # 0 graus
-        #("r2", "tractor", math.pi/4), # 45 graus
+        ("r2", "tractor", math.pi/4), # 45 graus
         #("r3", "tractor", math.pi/2), # 90 graus
         #("r4", "tractor", 3*math.pi/4), # 135 graus
         #("r5", "tractor", -3*math.pi/4), # -135 graus
         #("r6", "tractor", -math.pi/2), # -90 graus
-        #("r7", "tractor", -math.pi/4), # -45 graus
+        ("r3", "tractor", -math.pi/4), # -45 graus
 
         #("r8", "trailer", math.pi/4), # 45 graus
         #("r9", "trailer", math.pi/2), # 90 graus
-        #("r10", "trailer", 3*math.pi/4), # 135 graus
-        #("r11", "trailer", -3*math.pi/4), # -135 graus
+        ("r4", "trailer", 3*math.pi/4), # 135 graus
+        ("r5", "trailer", -3*math.pi/4), # -135 graus
         #("r12", "trailer", -math.pi/2), # -90 graus
         #("r13", "trailer", -math.pi/4), # -45 graus
-        ("r2", "trailer", math.pi), # 180 graus
+        ("r6", "trailer", math.pi), # 180 graus
     ]
 
     MAX_RAYCAST_LENGTH = 150.0 # 10 metros
@@ -331,11 +329,6 @@ class ArticulatedVehicle():
         rear_axle_center_x = self.position_x_trator + self.distancia_eixo_traseiro_quinta_roda * math.cos(self.theta_trator)
         rear_axle_center_y = self.position_y_trator + self.distancia_eixo_traseiro_quinta_roda * math.sin(self.theta_trator)
         return rear_axle_center_x, rear_axle_center_y
-
-    def get_trailer_rear_axle_position(self) -> tuple[float, float]:
-        rear_axle_center_x = self.position_x_trator - self.distancia_eixo_traseiro_trailer_quinta_roda * math.cos(self.theta_trator - self.beta_trator)
-        rear_axle_center_y = self.position_y_trator - self.distancia_eixo_traseiro_trailer_quinta_roda * math.sin(self.theta_trator - self.beta_trator)
-        return rear_axle_center_x, rear_axle_center_y
     
     def get_wheels_bounding_boxes(self) -> list[BoundingBox]:
         # Center of the front axle (from rear axle by 'distancia_eixo_dianteiro_quinta_roda')
@@ -370,8 +363,8 @@ class ArticulatedVehicle():
             BoundingBox(front_right_wheel_position_x, front_right_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator + self.alpha_trator),
             BoundingBox(rear_left_wheel_position_x, rear_left_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator),
             BoundingBox(rear_right_wheel_position_x, rear_right_wheel_position_y, self.comprimento_roda, self.largura_roda, self.theta_trator),
-            BoundingBox(rear_left_trailer_wheel_position_x, rear_left_trailer_wheel_position_y, self.comprimento_roda, self.largura_roda, -self.get_trailer_theta()),
-            BoundingBox(rear_right_trailer_wheel_position_x, rear_right_trailer_wheel_position_y, self.comprimento_roda, self.largura_roda, -self.get_trailer_theta()),
+            BoundingBox(rear_left_trailer_wheel_position_x, rear_left_trailer_wheel_position_y, self.comprimento_roda, self.largura_roda, self.get_trailer_theta()),
+            BoundingBox(rear_right_trailer_wheel_position_x, rear_right_trailer_wheel_position_y, self.comprimento_roda, self.largura_roda, self.get_trailer_theta()),
         ]
 
     def check_collision(self, entity: MapEntity) -> bool:
@@ -384,6 +377,7 @@ class Map:
 
     entities: list[MapEntity]
     parking_goal: MapEntity
+    start_position: MapEntity
     size_x: float
     size_y: float
     spawn_margin: float
@@ -421,41 +415,26 @@ class Map:
     def get_size(self) -> tuple[float, float]:
         return (self.size_x, self.size_y)
 
-    def get_random_start_position(self, vehicle: ArticulatedVehicle, max_attempts: int = 100) -> tuple[float, float]:
-        """Retorna uma posição aleatória válida dentro do mapa com margem de segurança de 10 metros""" 
-        ## faz várias tentativas de encontrar uma posição válida
-        for _ in range(max_attempts):
-            valid_position = True
-            x = random.uniform(self.spawn_margin, self.size_x -self.spawn_margin)
-            y = random.uniform(self.spawn_margin, self.size_y -self.spawn_margin)
-            for entity in self.entities:
-                if(vehicle.check_collision(entity)):
-                    valid_position = False
-                    break
-            if(valid_position):
-                return x, y
-        return None
 
-    def add_goal_randomly(self):
-        self.parking_goal = MapEntity(position_x=random.uniform(self.spawn_margin, self.size_x -self.spawn_margin), position_y=random.uniform(self.spawn_margin, self.size_y -self.spawn_margin), width=7.0, height=12.0, theta=math.radians(random.uniform(0, 360)), type=MapEntity.ENTITY_PARKING_GOAL)
-        self.add_entity(self.parking_goal)
-        self.entities.append(self.parking_goal)
-
+    def get_start_position(self) -> MapEntity:
+        if self.start_position is None:
+            raise Exception("Must add a start position to the map before getting it")
+        return self.start_position
 
     def place_vehicle(self, vehicle: ArticulatedVehicle):
-        start_pos = self.get_random_start_position(vehicle, max_attempts=100)
-        if start_pos is None:
-            start_x = self.size_x / 2
-            start_y = self.size_y / 2
-        else:
-            start_x, start_y = start_pos
-        start_theta = 0.0
-        start_beta = 0.0
-        start_alpha = 0.0
-        vehicle.update_physical_properties(start_x, start_y, 0.0, start_theta, start_beta, start_alpha)
+        if self.start_position is None:
+            raise Exception("Must add a start position to the map before placing a vehicle")
+        start_pos = self.get_start_position()
+        start_theta = start_pos.theta
+        vehicle.update_physical_properties(start_pos.position_x, start_pos.position_y, 0.0, start_theta, 0.0, 0.0)
         vehicle.initialize_raycasts()
         vehicle.update_raycasts(self.entities)
 
+    def check_collision_with_entities(self, entity: MapEntity) -> bool:
+        for other_entity in self.entities:
+            if entity.get_bounding_box().check_collision(other_entity.get_bounding_box()):
+                return True
+        return False
 
 
 

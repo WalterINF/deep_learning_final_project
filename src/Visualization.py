@@ -14,10 +14,11 @@ from pygame.font import Font
 pygame.font.init()
 
 color_and_fill_mappings = {
-    MapEntity.ENTITY_WALL: ((200, 0, 0), True), ## vermelho
+    MapEntity.ENTITY_WALL: ((128, 128, 128), True), ## cinza
     MapEntity.ENTITY_OBSTACLE: ((0, 0, 0), True), ## preto
     MapEntity.ENTITY_PARKING_SLOT: ((0, 0, 0), True), ## preto
-    MapEntity.ENTITY_PARKING_GOAL: ((0, 200, 0), True), ## verde
+    MapEntity.ENTITY_PARKING_GOAL: ((0, 255, 0), True), ## verde
+    MapEntity.ENTITY_START: ((255, 255, 0), True), ## amarelo
 }
 
 font = Font(None, 20)
@@ -29,6 +30,7 @@ def to_rgb_array(
     img_size: tuple[int, int] = None,
     goal_distance: float = None,
     goal_direction: float = None,
+    total_reward: float = None,
 ) -> list[list[list[int]]]:
     """Gera uma imagem RGB do mapa e suas entidades.
 
@@ -57,6 +59,7 @@ def to_rgb_array(
     # Superfície onde desenharemos (não requer display inicializado)
     surface = pygame.Surface((width, height))
 
+
     # Fundo branco
     surface.fill((255, 255, 255))
 
@@ -76,32 +79,34 @@ def to_rgb_array(
         else:
             gfxdraw.aapolygon(surface, scaled_corners, color)
 
+    # Desenha as rodas do trator
+    wheels_bboxes = vehicle.get_wheels_bounding_boxes()
+    for wheel_bbox in wheels_bboxes:
+        wheel_corners = wheel_bbox.get_corners()
+        wheel_scaled = [(x * scale_x, y * scale_y) for (x, y) in wheel_corners]
+        gfxdraw.aapolygon(surface, wheel_scaled, (0, 0, 0))
+        gfxdraw.filled_polygon(surface, wheel_scaled, (0, 0, 0))
+
     # Desenha o veículo
     if vehicle is not None:
         # Tractor
         tractor_bbox = vehicle.get_bounding_box_tractor()
         tractor_corners = tractor_bbox.get_corners()
         tractor_scaled = [(x * scale_x, y * scale_y) for (x, y) in tractor_corners]
-        gfxdraw.aapolygon(surface, tractor_scaled, (0, 0, 255))
-
-        # Desenha as rodas do trator
-        wheels_bboxes = vehicle.get_wheels_bounding_boxes()
-        for wheel_bbox in wheels_bboxes:
-            wheel_corners = wheel_bbox.get_corners()
-            wheel_scaled = [(x * scale_x, y * scale_y) for (x, y) in wheel_corners]
-            gfxdraw.aapolygon(surface, wheel_scaled, (0, 0, 0))
-            gfxdraw.filled_polygon(surface, wheel_scaled, (0, 0, 0))
+        gfxdraw.aapolygon(surface, tractor_scaled, (128, 128, 255)) ## azul claro
+        gfxdraw.filled_polygon(surface, tractor_scaled, (128, 128, 255)) ## azul claro
 
         # Trailer
         trailer_bbox = vehicle.get_bounding_box_trailer()
         trailer_corners = trailer_bbox.get_corners()
         trailer_scaled = [(x * scale_x, y * scale_y) for (x, y) in trailer_corners]
-        gfxdraw.aapolygon(surface, trailer_scaled, (0, 200, 0))
+        gfxdraw.aapolygon(surface, trailer_scaled, (0, 200, 0)) ## verde
+        gfxdraw.filled_polygon(surface, trailer_scaled, (0, 200, 0)) ## verde
 
         # Quinta roda do trator (círculo)
         axle_pos = (vehicle.position_x_trator * scale_x, vehicle.position_y_trator * scale_y)
         axle_radius = 0.5 * scale_x
-        gfxdraw.filled_circle(surface, int(axle_pos[0]), int(axle_pos[1]), int(axle_radius), (200, 0, 0))
+        gfxdraw.filled_circle(surface, int(axle_pos[0]), int(axle_pos[1]), int(axle_radius), (128, 0, 128)) # roxo
 
         # Desenha os raycasts com círculos nas pontas
         for _, raycast in vehicle.raycasts.items():
@@ -109,19 +114,19 @@ def to_rgb_array(
             raycast_angle = raycast.theta
             raycast_length = raycast.length * scale_x
             line_end_position = (raycast_position[0] + raycast_length * math.cos(raycast_angle), raycast_position[1] + raycast_length * math.sin(raycast_angle))
-            gfxdraw.line(surface, int(raycast_position[0]), int(raycast_position[1]), int(line_end_position[0]), int(line_end_position[1]), (0, 0, 255))
-            gfxdraw.filled_circle(surface, int(line_end_position[0]), int(line_end_position[1]), int(0.5 * scale_x), (0, 0, 255))
+            gfxdraw.line(surface, int(raycast_position[0]), int(raycast_position[1]), int(line_end_position[0]), int(line_end_position[1]), (255, 0, 0))
+            gfxdraw.filled_circle(surface, int(line_end_position[0]), int(line_end_position[1]), int(0.5 * scale_x), (255, 0, 0))
 
-    # desenha ações na tela
-    if vehicle.get_velocity() is not None:
-        velocity_text = f"Velocity: {vehicle.get_velocity():.2f}"
-        velocity_surface = font.render(velocity_text, True, (0, 0, 0))
-        surface.blit(velocity_surface, (10, 10))
+        # desenha ações na tela
+        if vehicle.get_velocity() is not None:
+            velocity_text = f"Velocity: {vehicle.get_velocity():.2f}"
+            velocity_surface = font.render(velocity_text, True, (0, 0, 0))
+            surface.blit(velocity_surface, (10, 10))
 
-    if vehicle.get_alpha() is not None:
-        alpha_text = f"Alpha: {vehicle.get_alpha():.2f}"
-        alpha_surface = font.render(alpha_text, True, (0, 0, 0))
-        surface.blit(alpha_surface, (10, 30))
+        if vehicle.get_alpha() is not None:
+            alpha_text = f"Alpha: {vehicle.get_alpha():.2f}"
+            alpha_surface = font.render(alpha_text, True, (0, 0, 0))
+            surface.blit(alpha_surface, (10, 30))
 
     if goal_distance is not None:
         goal_distance_text = f"Goal Distance: {goal_distance:.2f}"
@@ -132,6 +137,11 @@ def to_rgb_array(
         goal_direction_text = f"Goal Direction: {goal_direction:.2f}"
         goal_direction_surface = font.render(goal_direction_text, True, (0, 0, 0))
         surface.blit(goal_direction_surface, (10, 70))
+
+    if total_reward is not None:
+        total_reward_text = f"Total Reward: {total_reward:.2f}"
+        total_reward_surface = font.render(total_reward_text, True, (0, 0, 0))
+        surface.blit(total_reward_surface, (10, 90))
 
     # Extrai os pixels como bytes em ordem RGB
     raw_bytes = pygame.image.tostring(surface, "RGB")

@@ -1,14 +1,13 @@
 import numpy as np
 import gymnasium as gym
-from VehicleConfigLoader import VehicleConfigLoader
-from Simulation import ArticulatedVehicle
-from Simulation import Map
-from Simulation import MapEntity
+from src.SimulationConfigLoader import VehicleConfigLoader, MapConfigLoader
+from src.Simulation import ArticulatedVehicle
+from src.Simulation import Map
+from src.Simulation import MapEntity
 import random
-import Visualization
+import src.Visualization as Visualization
 from casadi import cos, sin, tan
 from typing import Any, SupportsFloat, Optional
-from MapConfigLoader import create_default_map
 from stable_baselines3 import PPO
 import stable_baselines3.common.monitor
 import torch
@@ -25,7 +24,7 @@ class ParkingEnv(gym.Env):
 
         loader = VehicleConfigLoader("codigos/lista_veiculos.json")
         vehicle_geometry = loader.get_geometry(vehicle_name)
-        self.vehicle = ArticulatedVehicle(geometry=vehicle_geometry)
+        self.vehicle = ArticulatedVehicle(vehicle_geometry)
         self.map = map
         self.dt = dt
         self.max_steps = max_steps
@@ -253,7 +252,7 @@ def evaluate_model(model: PPO, iterations: int = 10):
     
 def run_episode_and_save_video(model):
     video_recorder = Visualization.VideoRecorder("simulation.mp4", fps=10)
-    map = create_default_map()
+    map = MapConfigLoader("config/lista_mapas.json").load_map("MAPA_1")
     env = ParkingEnv(vehicle_name="BUG1", map=map, dt=0.5, max_steps=max_steps)
     observation, info = env.reset()
     total_reward = 0.0
@@ -271,7 +270,7 @@ def run_episode_and_save_video(model):
     return total_reward
 
 def run_episode(model):
-    map = create_default_map()
+    map = MapConfigLoader("config/lista_mapas.json").load_map("MAPA_1")
     env = ParkingEnv(vehicle_name="BUG1", map=map, dt=0.5, max_steps=max_steps)
     observation, info = env.reset()
     total_reward = 0.0
@@ -287,7 +286,7 @@ def run_episode(model):
     return total_reward
 
 def run_random_episode():
-    map = create_default_map()
+    map = MapConfigLoader("config/lista_mapas.json").load_map("MAPA_1")
     env = ParkingEnv(vehicle_name="BUG1", map=map, dt=0.03, max_steps=max_steps)
     observation, info = env.reset()
     total_reward = 0.0
@@ -308,7 +307,7 @@ def train_ppo(model: PPO | None = None):
 
     log_dir = "logs"
 
-    map = create_default_map()
+    map = MapConfigLoader("config/lista_mapas.json").load_map("MAPA_1")
 
     env = ParkingEnv(vehicle_name="BUG1", map=map, dt=0.5, max_steps=max_steps)
 

@@ -17,7 +17,7 @@ pygame.font.init()
 color_and_fill_mappings = {
     MapEntity.ENTITY_WALL: ((100, 100, 100), True), ## cinza
     MapEntity.ENTITY_OBSTACLE: ((0, 0, 0), True), ## preto
-    MapEntity.ENTITY_PARKING_SLOT: ((0, 0, 0), False), ## preto
+    MapEntity.ENTITY_PARKING_SLOT: ((200, 200, 200), False), ## cinza claro
     MapEntity.ENTITY_PARKING_GOAL: ((0, 255, 0), True), ## verde
     MapEntity.ENTITY_START: ((255, 255, 0), True), ## amarelo
 }
@@ -45,13 +45,15 @@ def to_rgb_array(
         list[list[list[int]]]: Array [H][W][3] com valores RGB (0-255)
     """
 
+    map_width, map_height = map.get_size()
+
     # Define dimensões de saída da imagem
     if img_size is None:
-        width = int(map.get_size()[0])
-        height = int(map.get_size()[1])
+        width = int(map_width)
+        height = int(map_height)
     else:
-        width = max(map.get_size()[0], int(img_size[0]))
-        height = max(map.get_size()[1], int(img_size[1]))
+        width = max(map_width, int(img_size[0]))
+        height = max(map_height, int(img_size[1]))
 
     # Fatores de escala do espaço do mapa -> pixels da imagem
     scale_x = (width / float(map.size_x)) if map.size_x else 1.0
@@ -65,10 +67,10 @@ def to_rgb_array(
     surface.fill((128, 128, 128))
 
     ##add a grid
-    for x in range(0, width, 10):
-        pygame.draw.line(surface, (100, 100, 100), (x, 0), (x, height), width=1)
-    for y in range(0, height, 10):
-        pygame.draw.line(surface, (100, 100, 100), (0, y), (width, y), width=1)
+    for x in range(0, int(map_width), 10):
+        pygame.draw.line(surface, (100, 100, 100), (x, 0), (x, int(map_height)), width=1)
+    for y in range(0, int(map_height), 10):
+        pygame.draw.line(surface, (100, 100, 100), (0, y), (int(map_width), y), width=1)
 
     # Borda vermelha do mapa
     pygame.draw.rect(surface, (255, 0, 0), pygame.Rect(0, 0, width, height), width=1)

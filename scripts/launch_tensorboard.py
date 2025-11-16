@@ -4,7 +4,7 @@ import sys
 import os
 
 # --- Configuration ---
-LOG_DIR = "src\logs"
+LOG_DIR = "/home/walter/Área de trabalho/deep_learning_final_project/src/logs"
 # ---------------------
 
 def launch_tensorboard():

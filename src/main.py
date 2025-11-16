@@ -13,6 +13,7 @@ import stable_baselines3.common.monitor
 import torch
 import os
 import tensorboard
+import numerize
 
 max_steps = 500
 
@@ -350,8 +351,93 @@ def train_ppo(model: PPO | None = None):
 
     model.save("ppo_model")
 
-    return model
+
+    policy_kwargs = dict(activation_fn=torch.nn.ReLU,
+                     net_arch=dict(pi=[64, 64], vf=[64, 64]))
+
+                     
+
+
+
+    train_new_model = False
+    model_to_load = "ppo_model_5M.zip"
+    total_training_timesteps = 5000000
+
+    training_timesteps_formatted = numerize.numerize(total_training_timesteps)
+    model_save_dir = "models"
+
+    model = None
+    if train_new_model:
+        model = train_ppo(None, total_timesteps=total_training_timesteps)
+
+        model_save_name = "ppo_model_" + str(training_timesteps_formatted) + ".zip"
+        model_save_path = os.path.join(model_save_dir, model_save_name)
+        os.makedirs(model_save_dir, exist_ok=True)
+        model.save(model_save_path)
+    else:
+        model_save_path = os.path.join(model_save_dir, model_to_load)
+        model = PPO.load(model_save_path)
+        model = train_ppo(model, total_training_timesteps)
+
+        model_save_name = model_to_load
+        model_save_path = os.path.join(model_save_dir, model_save_name)
+        os.makedirs(model_save_dir, exist_ok=True)
+        model.save(model_save_path)
 
 
 if __name__ == "__main__":
     main()
+
+def train_ppo(model: PPO | None = None, total_timesteps: int = 10000, save_every: int | None = None, save_path: str | None = None):
+    """
+        Treina o modelo PPO
+        Args:
+            model: Modelo PPO a ser treinado, se None, cria um novo modelo, senão treina modelo existente
+            total_timesteps: Total de timesteps para treinar
+            save_every: O modelo será salvo a cada save_every timesteps durante o treinamento
+            save_path: Caminho para salvar o modelo
+        Returns:
+            Modelo PPO treinado
+    """
+    # Create environment
+    env = make_vector_env()
+
+    # neural network hyperparameters
+    # net_arch is a list of number of neurons per hidden layer, e.g. [16,20] means
+    # two hidden layers with 16 and 20 neurons, respectively
+    policy_kwargs = dict(activation_fn=torch.nn.ReLU,
+                     net_arch=dict(pi=[64, 64], vf=[64, 64]))
+
+    # instantiates the model using the defined hyperparameters
+    if model is None:
+        model = PPO(
+            policy="MlpPolicy",           # neural network policy architecture (MLP for vector observations)
+            env=env,                      # gymnasium-compatible environment to train on
+            policy_kwargs=policy_kwargs,  # custom network architecture and activation
+            verbose=0,                    # logging verbosity: 0(silent),1(info),2(debug)
+            tensorboard_log=log_dir,      # directory for TensorBoard logs
+            learning_rate=0.0003,           # optimizer learning rate
+            n_steps=2048,                 # rollout steps per environment update
+            batch_size=64,                # minibatch size for optimization
+            gamma=0.9995,                   # discount factor
+            gae_lambda=0.95,              # GAE lambda for bias-variance tradeoff
+            ent_coef=0.0,                 # entropy coefficient (encourages exploration)
+            clip_range=0.2,               # PPO clipping parameter
+            n_epochs=10,                  # number of optimization epochs per update
+
+            device="auto"                 # use GPU if available, else CPU
+        )
+    else:
+        model.set_env(env)
+
+    # You can also experiment with other RL algorithms like A2C, PPO, DDPG etc.
+    # Refer to  https://stable-baselines3.readthedocs.io/en/master/guide/examples.html
+    # for documentation. For example, if you would like to run DDPG, just replace "DQN" above with "DDPG".
+    timesteps_split = 0
+    if save_every is not None:
+        timesteps_split = int(total_timesteps / save_every)
+        for i in range(timesteps_split):
+            model.learn(total_timesteps=save_every, progress_bar=True)
+            model.save(save_path)
+
+    return model

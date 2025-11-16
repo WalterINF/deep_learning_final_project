@@ -73,19 +73,21 @@ class MapConfigLoader:
     def __init__(self, json_path: str):
         self.json_path = json_path
 
-    def load_map(self, map_name: str = "MAPA_1", width: float = 60.0, height: float = 60.0) -> Map:
+    def load_map(self, map_name: str = "MAPA_1") -> Map:
         if( map_name == "MAPA_1"):
-            return self._create_default_map(width, height)
+            return self._create_default_map()
         else:
             raise ValueError(f"Mapa '{map_name}' não encontrado")
 
 
-    def _create_default_map(self, width: float, height: float) -> Map:
+    def _create_default_map(self) -> Map:
+        max_parking_lots = 100 # máximo de vagas de estacionamento
+        width = 90.0
+        height = 90.0
         width_wall = 2.0
         width_parking_slot = 7.0
         height_parking_slot = 12.0
-        spawn_margin = min(10.0, width/2, height/2)
-        max_attempts = 1000
+        spawn_margin = min(20.0, width/2, height/2)
         map = Map((width, height))
         # parede esquerda
         map.add_entity(MapEntity(position_x=0, position_y=height/2, width=width_wall, height=height, theta=0, type=MapEntity.ENTITY_WALL))
@@ -96,38 +98,32 @@ class MapConfigLoader:
         # parede inferior
         map.add_entity(MapEntity(position_x=width/2, position_y=height, width=width, height=width_wall, theta=0, type=MapEntity.ENTITY_WALL))
 
-        new_parking_goal = MapEntity(position_x=random.uniform(spawn_margin, width -spawn_margin), position_y=random.uniform(spawn_margin, height -spawn_margin), width=20.0, height=20.0, theta=math.radians(random.uniform(0, 360)), type=MapEntity.ENTITY_PARKING_GOAL)
-        attempts = 0
-        while map.check_collision_with_entities(new_parking_goal):
-            attempts += 1
-            if attempts > max_attempts:
-                raise Exception(f"Failed to add parking goal to map after {max_attempts} attempts")
-            new_parking_goal = MapEntity(position_x=random.uniform(spawn_margin, width -spawn_margin), position_y=random.uniform(spawn_margin, height -spawn_margin), width=20.0, height=20.0, theta=math.radians(random.uniform(0, 360)), type=MapEntity.ENTITY_PARKING_GOAL)
-        map.add_entity(new_parking_goal)
-        map.parking_goal = new_parking_goal
+        parking_lots_rows_heights = []
+        parking_lots_row_spacing = 20.0
+        height_row = spawn_margin + height_parking_slot/2
+        while height_row < height:
+            parking_lots_rows_heights.append(height_row)
+            height_row += parking_lots_row_spacing + height_parking_slot
 
-        new_start_position = MapEntity(
-            position_x=random.uniform(spawn_margin, width -spawn_margin), 
-            position_y=random.uniform(spawn_margin, height -spawn_margin), 
-                width=12, 
-                height=7.0, 
-                theta=random.uniform(0, 2*math.pi), 
-                type=MapEntity.ENTITY_START
-            )
-        while map.check_collision_with_entities(new_start_position):
-            attempts += 1
-            if attempts > max_attempts:
-                raise Exception(f"Failed to add start position to map after {max_attempts} attempts")
-            new_start_position = MapEntity(
-                position_x=random.uniform(spawn_margin, width -spawn_margin), 
-                position_y=random.uniform(spawn_margin, height -spawn_margin), 
-                width=7, 
-                height=12.0, 
-                theta=random.uniform(0, 2*math.pi), 
-                type=MapEntity.ENTITY_START
-            )
-        map.add_entity(new_start_position)
-        map.start_position = new_start_position
+        parking_lots_start_x = spawn_margin + width_parking_slot/2
+        parking_lots_end_x = width - spawn_margin - width_parking_slot/2
+
+        
+        for row_height in parking_lots_rows_heights:
+            parking_lots_start_x = spawn_margin + width_parking_slot/2
+            while parking_lots_start_x < parking_lots_end_x:
+                new_parking_slot = MapEntity(position_x=parking_lots_start_x, position_y=row_height, width=width_parking_slot, height=height_parking_slot, theta=0, type=MapEntity.ENTITY_PARKING_SLOT)
+                map.add_entity(new_parking_slot)
+                parking_lots_start_x += width_parking_slot
+
+        ## escolhe uma das vagas para se tornar o ponoito de partida e o objetivo de estacionamento
+        chosen_parking_slot = map.get_random_parking_slot()
+        chosen_parking_slot.type = MapEntity.ENTITY_PARKING_GOAL
+        map.parking_goal = chosen_parking_slot
+
+        chosen_parking_slot = map.get_random_parking_slot()
+        chosen_parking_slot.type = MapEntity.ENTITY_START
+        map.start_position = chosen_parking_slot
 
 
         return map

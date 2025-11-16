@@ -64,19 +64,19 @@ class ArticulatedVehicle():
        # (nome,   origem,    ângulo de offset)
         ("r1", "tractor", 0.0), # 0 graus
         ("r2", "tractor", math.pi/4), # 45 graus
-        #("r3", "tractor", math.pi/2), # 90 graus
-        #("r4", "tractor", 3*math.pi/4), # 135 graus
-        #("r5", "tractor", -3*math.pi/4), # -135 graus
-        #("r6", "tractor", -math.pi/2), # -90 graus
-        ("r3", "tractor", -math.pi/4), # -45 graus
+        ("r3", "tractor", math.pi/2), # 90 graus
+        ("r4", "tractor", 3*math.pi/4), # 135 graus
+        ("r5", "tractor", -3*math.pi/4), # -135 graus
+        ("r6", "tractor", -math.pi/2), # -90 graus
+        ("r7", "tractor", -math.pi/4), # -45 graus
 
-        #("r8", "trailer", math.pi/4), # 45 graus
-        #("r9", "trailer", math.pi/2), # 90 graus
-        ("r4", "trailer", 3*math.pi/4), # 135 graus
-        ("r5", "trailer", -3*math.pi/4), # -135 graus
-        #("r12", "trailer", -math.pi/2), # -90 graus
-        #("r13", "trailer", -math.pi/4), # -45 graus
-        ("r6", "trailer", math.pi), # 180 graus
+        ("r8", "trailer", math.pi/4), # 45 graus
+        ("r9", "trailer", math.pi/2), # 90 graus
+        ("r10", "trailer", 3*math.pi/4), # 135 graus
+        ("r11", "trailer", -3*math.pi/4), # -135 graus
+        ("r12", "trailer", -math.pi/2), # -90 graus
+        ("r13", "trailer", -math.pi/4), # -45 graus
+        ("r14", "trailer", math.pi), # 180 graus
     ]
 
     MAX_RAYCAST_LENGTH = 150.0 # 10 metros
@@ -402,7 +402,6 @@ class Map:
         return self.parking_goal.theta
 
     def add_entity(self, entity: MapEntity):
-        #if the entity is a parking goal, delete all other parking goals
         if entity.type == MapEntity.ENTITY_PARKING_GOAL:
             self.parking_goal = entity
             self.entities.append(entity)
@@ -411,6 +410,12 @@ class Map:
 
     def get_entities(self) -> list[MapEntity]:
         return self.entities
+
+    def get_parking_slots(self) -> list[MapEntity]:
+        return [entity for entity in self.entities if entity.type == MapEntity.ENTITY_PARKING_SLOT]
+
+    def get_random_parking_slot(self) -> MapEntity:
+        return random.choice(self.get_parking_slots())
 
     def get_size(self) -> tuple[float, float]:
         return (self.size_x, self.size_y)
@@ -425,7 +430,7 @@ class Map:
         if self.start_position is None:
             raise Exception("Must add a start position to the map before placing a vehicle")
         start_pos = self.get_start_position()
-        start_theta = start_pos.theta
+        start_theta = start_pos.theta + math.pi / 2
         vehicle.update_physical_properties(start_pos.position_x, start_pos.position_y, 0.0, start_theta, 0.0, 0.0)
         vehicle.initialize_raycasts()
         vehicle.update_raycasts(self.entities)

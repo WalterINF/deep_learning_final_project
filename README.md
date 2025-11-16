@@ -24,14 +24,13 @@ O agente deve posicionar o trailer sobre o objetivo, que é uma vaga de estacion
 
 #### Espaço de observação (o que o agente observa)
 
-Estado: [x, y, theta, beta, alpha*, [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14], obj_x, obj_y, obj_theta], onde:
-* x, y: posição do veiculo no mapa.
+Estado: [theta, beta, alpha*, [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14], goal_distance, goal_direction], onde:
 * theta: ângulo de orientação do veiculo.
 * beta: ângulo relativo entre o trator e o trailer.
 * alpha*: ângulo de esterçamento do trator.
-* r1, ..., r14: raycasts posicionados com origem no veiculo.
-* obj_x, obj_y: posição do objetivo no mapa.
-* obj_theta: ângulo de orientação do objetivo.
+* r1, ..., r14: distâncias dos raycasts posicionados com origem no veiculo.
+* goal_distance: distância euclidiana do veiculo ao objetivo.
+* goal_direction: ângulo de orientação do veiculo em relação ao objetivo em radianos.
     
 ![veiculo com raycasts](veiculo_com_os_raycast.png)
 
@@ -43,14 +42,15 @@ Controle: [v, alpha], onde:
 * alpha: ângulo de esterçamento do trator.
 
 #### Função de recompensa (o que o agente recebe)
-* proporcional ao angulo de esterçamento do trator e velocidade do trator.
-* (talvez) punir o trator por esterçar as rodas enquanto estacionário.
-* +1 por compleção do objetivo, -1 por parada precoce (ver critérios de parada)
+* +100 por compleção do objetivo (estacionar na vaga de destino)
+* -150 por colisão com obstáculos - incluindo outras vagas de estacionamento que não sejam a de origem ou destino - ou com o próprio veículo
+* -150 por jackknife
+* -0.01 por passo de tempo
+* -0.05 por velocidade zero por passo de tempo
 
 #### critérios de parada
-* colisão com obstáculos ou com o próprio veículo
-* tempo: 5 minutos
-* esterçamento muito brusco: > 10 graus/s.
+* colisão com obstáculos - incluindo outras vagas de estacionamento que não sejam a de origem ou destino - com o próprio veículo ou paredes do ambiente
+* tempo: 2 minutos
 * objetivo atingido: veiculo estacionado no ponto de destino.
 
 
@@ -62,9 +62,6 @@ limites de velocidade do trator: 20km/h ou 5m/s.
 angulo de canivete: 65 graus.
 limite de visão do sensor de distância: 150 metros.
 
-
-//todo:
-definir a equação de atualização dos estados do veículo: taxa de variação do angulo de esterçamento do trator.
 
 
 

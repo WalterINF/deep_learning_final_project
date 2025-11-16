@@ -2,6 +2,7 @@ from typing import Iterable, List, Union
 from pathlib import Path
 import numpy as np
 from PIL import Image
+from numpy._core.numeric import False_
 import pygame
 from Simulation import Map
 import math
@@ -14,9 +15,9 @@ from pygame.font import Font
 pygame.font.init()
 
 color_and_fill_mappings = {
-    MapEntity.ENTITY_WALL: ((128, 128, 128), True), ## cinza
+    MapEntity.ENTITY_WALL: ((100, 100, 100), True), ## cinza
     MapEntity.ENTITY_OBSTACLE: ((0, 0, 0), True), ## preto
-    MapEntity.ENTITY_PARKING_SLOT: ((0, 0, 0), True), ## preto
+    MapEntity.ENTITY_PARKING_SLOT: ((0, 0, 0), False), ## preto
     MapEntity.ENTITY_PARKING_GOAL: ((0, 255, 0), True), ## verde
     MapEntity.ENTITY_START: ((255, 255, 0), True), ## amarelo
 }
@@ -60,8 +61,14 @@ def to_rgb_array(
     surface = pygame.Surface((width, height))
 
 
-    # Fundo branco
-    surface.fill((255, 255, 255))
+    # Fundo cinza 
+    surface.fill((128, 128, 128))
+
+    ##add a grid
+    for x in range(0, width, 10):
+        pygame.draw.line(surface, (100, 100, 100), (x, 0), (x, height), width=1)
+    for y in range(0, height, 10):
+        pygame.draw.line(surface, (100, 100, 100), (0, y), (width, y), width=1)
 
     # Borda vermelha do mapa
     pygame.draw.rect(surface, (255, 0, 0), pygame.Rect(0, 0, width, height), width=1)

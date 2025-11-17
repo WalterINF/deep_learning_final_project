@@ -30,7 +30,7 @@ class ParkingEnv(gym.Env):
     DT = 0.5 # tempo de simulação
     MAX_SECONDS = 120.0
     MAX_STEPS = int(MAX_SECONDS / DT)
-    VEHICLE_PARKED_THRESHOLD_M = 5 # distancia minima para considerar o veículo estacionado
+    VEHICLE_PARKED_THRESHOLD_M = 2 # distancia minima para considerar o veículo estacionado
 
 
     ## recompensas
@@ -41,7 +41,7 @@ class ParkingEnv(gym.Env):
     PUNISHMENT_TIME = MAX_PUNISHMENT_TIME_PER_EPISODE / MAX_STEPS # penalidade por tempo a cada passo
     PUNISHMENT_ZERO_SPEED = 5 * PUNISHMENT_TIME # penalidade por velocidade zero - 5 vezes maior que a penalidade por tempo
     PUNISHMENT_COLLISION = -150.0 # penalidade por colisão com paredes
-    PUNISHMENT_OVERLAP = -1 # penalidade por invadir uma vaga dada a cada passo
+    PUNISHMENT_OVERLAP = -5 # penalidade por invadir uma vaga dada a cada passo
     PUNISHMENT_JACKKNIFE = -150.0 # penalidade por jackknife
     PROGRESS_REWARD_MULTIPLIER = 0.5 # multiplicador da recompensa por progresso (recompensa = metros ganhos * multiplicador)
 

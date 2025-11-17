@@ -82,8 +82,8 @@ class MapConfigLoader:
 
     def _create_default_map(self) -> Map:
         max_parking_lots = 100 # máximo de vagas de estacionamento
-        width = 90.0
-        height = 90.0
+        width = 150.0
+        height = 150.0
         width_wall = 2.0
         width_parking_slot = 7.0
         height_parking_slot = 12.0

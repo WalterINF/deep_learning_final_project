@@ -2,7 +2,6 @@ from typing import Iterable, List, Union
 from pathlib import Path
 import numpy as np
 from PIL import Image
-from numpy._core.numeric import False_
 import pygame
 from Simulation import Map
 import math
@@ -68,10 +67,10 @@ def to_rgb_array(
     surface.fill((128, 128, 128))
 
     ##add a grid
-    for x in range(0, int(map_width), 10):
-        pygame.draw.line(surface, (100, 100, 100), (x, 0), (x, int(map_height)), width=1)
-    for y in range(0, int(map_height), 10):
-        pygame.draw.line(surface, (100, 100, 100), (0, y), (int(map_width), y), width=1)
+    for x in range(0, int(map_width * scale_x), 10):
+        pygame.draw.line(surface, (100, 100, 100), (x, 0), (x, int(map_height * scale_y)), width=1)
+    for y in range(0, int(map_height * scale_y), 10):
+        pygame.draw.line(surface, (100, 100, 100), (0, y), (int(map_width * scale_x), y), width=1)
 
     # Borda vermelha do mapa
     pygame.draw.rect(surface, (255, 0, 0), pygame.Rect(0, 0, width, height), width=1)

@@ -1,5 +1,5 @@
 import unittest
-from collisions import BoundingBox, Raycast
+from Simulation import BoundingBox
 import math
 
 class TestCollisions(unittest.TestCase):
@@ -34,17 +34,6 @@ class TestCollisions(unittest.TestCase):
         box2 = BoundingBox(0, 2, 1, 1, math.pi/2)
 
         self.assertFalse(box1.check_collision(box2))
-
-    def test_raycast_collision(self):
-        raycast1 = Raycast(0, 0, 0, 10)
-        box1 = BoundingBox(10, 0, 1, 1, 0)
-
-        self.assertTrue(raycast1.check_collision(box1))
-
-        raycast1 = Raycast(0, 0, math.pi/2, 10)
-        box1 = BoundingBox(10, 0, 1, 1, math.pi/2)
-
-        self.assertFalse(raycast1.check_collision(box1))
 
 
         

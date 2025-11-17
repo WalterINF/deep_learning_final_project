@@ -1,7 +1,7 @@
 import math
-from casadi import cos, sin
 import random
 from typing import Dict
+import numpy as np
 
 
 class RaycastResult:

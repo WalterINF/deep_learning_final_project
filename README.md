@@ -60,10 +60,12 @@ limites de angulo de esterçamento do trator: +-28 graus.
 limites de taxa de esterçamento do trator: +-10 graus/s.
 limites de velocidade do trator: 20km/h ou 5m/s.
 angulo de canivete: 65 graus.
-limite de visão do sensor de distância: 150 metros.
+limite de visão do sensor de distância: 20 metros.
 
 
+### Próximos passos
 
+- [ ] Implementar a diferenciação de objetos no sensor de distância (mudar o espaço de observação)
 
 
 

@@ -79,7 +79,7 @@ class ArticulatedVehicle():
         ("r14", "trailer", math.pi), # 180 graus
     ]
 
-    MAX_RAYCAST_LENGTH = 150.0 # 10 metros
+    MAX_RAYCAST_LENGTH = 20.0 # 20 metros
 
     def __init__(self, geometry: dict):
         # Inicializa como uma entidade neutra; dimensões/posição podem ser ajustadas posteriormente
@@ -237,6 +237,26 @@ class ArticulatedVehicle():
     def get_comprimento_trailer(self) -> float:
         return self.comprimento_trailer
 
+    def get_trailer_position(self) -> tuple[float, float]:
+        """Retorna a posição absoluta do ponto central do trailer"""
+        # Posição do ponto de articulação (quinta roda) no global
+        joint_x = self.position_x_trator + self.distancia_eixo_traseiro_quinta_roda * math.cos(self.theta_trator)
+        joint_y = self.position_y_trator + self.distancia_eixo_traseiro_quinta_roda * math.sin(self.theta_trator)
+        
+        # Orientação do trailer
+        theta_trailer = self.theta_trator - self.beta_trator
+        
+        # Deslocamento do centro do trailer a partir da quinta roda
+        # O centro fica deslocado por (comprimento/2 - distancia_frente_trailer_quinta_roda)
+        # ao longo do eixo do trailer em direção à traseira
+        offset_from_joint = (self.comprimento_trailer / 2.0) - self.distancia_frente_trailer_quinta_roda
+        
+        # Centro do trailer (deslocado do joint em direção à traseira)
+        center_x = joint_x - offset_from_joint * math.cos(theta_trailer)
+        center_y = joint_y - offset_from_joint * math.sin(theta_trailer)
+        
+        return center_x, center_y
+
     def get_distancia_eixo_traseiro_trailer_quinta_roda(self) -> float:
         return self.distancia_eixo_traseiro_trailer_quinta_roda
 
@@ -291,8 +311,6 @@ class ArticulatedVehicle():
         # width = comprimento (longitudinal, local x), height = largura (lateral, local y)
         return BoundingBox(cx, cy, self.comprimento_trator, self.largura_trator, self.theta_trator)
 
-    def get_trailer_position(self) -> tuple[float, float]:
-        return self.position_x_trator + self.distancia_eixo_traseiro_quinta_roda * math.cos(self.theta_trator), self.position_y_trator + self.distancia_eixo_traseiro_quinta_roda * math.sin(self.theta_trator)
 
     def get_bounding_box_trailer(self) -> BoundingBox:
         """
@@ -302,18 +320,10 @@ class ArticulatedVehicle():
         - Centro do trailer fica deslocado do pino de engate por (comprimento/2 - distancia_frente_trailer_quinta_roda)
         ao longo do eixo do trailer em direção à traseira.
         """
-        # Posição do ponto de articulação (quinta roda) no global
-        joint_x = self.position_x_trator + self.distancia_eixo_traseiro_quinta_roda * math.cos(self.theta_trator)
-        joint_y = self.position_y_trator + self.distancia_eixo_traseiro_quinta_roda * math.sin(self.theta_trator)
-
-        # Orientação do trailer
-        theta_trailer = self.theta_trator - self.beta_trator
-
-        # Deslocamento do centro do trailer a partir da quinta roda
-        cx, cy = self.get_trailer_position()
+        trailer_center_x, trailer_center_y = self.get_trailer_position()
 
         # width = comprimento (longitudinal, local x), height = largura (lateral, local y)
-        return BoundingBox(cx, cy, self.comprimento_trailer, self.largura_trailer, theta_trailer)
+        return BoundingBox(trailer_center_x, trailer_center_y, self.comprimento_trailer, self.largura_trailer, self.get_trailer_theta())
 
 
     def get_perpendicular_to_theta(self) -> float:

@@ -137,6 +137,14 @@ def to_rgb_array(
             alpha_surface = font.render(alpha_text, True, (0, 0, 0))
             surface.blit(alpha_surface, (10, 30))
 
+        #desenha distancia do objetivo
+        trailer_position = vehicle.get_trailer_position()
+        trailer_position_scaled = (trailer_position[0] * scale_x, trailer_position[1] * scale_y)
+        goal_position = map.get_parking_goal_position()
+        goal_position_scaled = (goal_position[0] * scale_x, goal_position[1] * scale_y)
+        gfxdraw.line(surface, int(trailer_position_scaled[0]), int(trailer_position_scaled[1]), int(goal_position_scaled[0]), int(goal_position_scaled[1]), (0, 0, 255)) ## azul
+        gfxdraw.filled_circle(surface, int(goal_position_scaled[0]), int(goal_position_scaled[1]), int(0.5 * scale_x), (0, 0, 255)) ## azul
+
     if goal_distance is not None:
         goal_distance_text = f"Goal Distance: {goal_distance:.2f}"
         goal_distance_surface = font.render(goal_distance_text, True, (0, 0, 0))

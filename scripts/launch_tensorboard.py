@@ -2,9 +2,9 @@
 import subprocess
 import sys
 import os
-
+import pathlib
 # --- Configuration ---
-LOG_DIR = "/home/walter/Área de trabalho/deep_learning_final_project/src/logs"
+LOG_DIR = str(pathlib.Path(__file__).parent.parent / "src" / "logs")
 # ---------------------
 
 def launch_tensorboard():

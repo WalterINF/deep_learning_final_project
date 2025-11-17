@@ -9,14 +9,15 @@ import math
 from pygame import gfxdraw
 from Simulation import MapEntity
 from Simulation import ArticulatedVehicle
+from Simulation import RaycastResult, BoundingBox
 from pygame.font import Font
 
 # Initialize pygame.font before creating Font objects
 pygame.font.init()
 
 color_and_fill_mappings = {
+    MapEntity.ENTITY_NOTHING: ((255, 255, 255), False), ## branco
     MapEntity.ENTITY_WALL: ((100, 100, 100), True), ## cinza
-    MapEntity.ENTITY_OBSTACLE: ((0, 0, 0), True), ## preto
     MapEntity.ENTITY_PARKING_SLOT: ((200, 200, 200), False), ## cinza claro
     MapEntity.ENTITY_PARKING_GOAL: ((0, 255, 0), True), ## verde
     MapEntity.ENTITY_START: ((255, 255, 0), True), ## amarelo
@@ -118,13 +119,38 @@ def to_rgb_array(
         gfxdraw.filled_circle(surface, int(axle_pos[0]), int(axle_pos[1]), int(axle_radius), (128, 0, 128)) # roxo
 
         # Desenha os raycasts com círculos nas pontas
-        for _, raycast in vehicle.raycasts.items():
-            raycast_position = (raycast.origin_x * scale_x, raycast.origin_y * scale_y)
-            raycast_angle = raycast.theta
-            raycast_length = raycast.length * scale_x
-            line_end_position = (raycast_position[0] + raycast_length * math.cos(raycast_angle), raycast_position[1] + raycast_length * math.sin(raycast_angle))
-            gfxdraw.line(surface, int(raycast_position[0]), int(raycast_position[1]), int(line_end_position[0]), int(line_end_position[1]), (255, 0, 0))
-            gfxdraw.filled_circle(surface, int(line_end_position[0]), int(line_end_position[1]), int(0.5 * scale_x), (255, 0, 0))
+
+        for raycast_result in vehicle.get_raycast_results().values():
+            raycast_position = (raycast_result.origin_x * scale_x, raycast_result.origin_y * scale_y)
+            raycast_angle = raycast_result.theta
+            raycast_length = raycast_result.length * scale_x
+            line_end_position = (
+                raycast_position[0] + raycast_length * math.cos(raycast_angle),
+                raycast_position[1] + raycast_length * math.sin(raycast_angle),
+            )
+
+            # Define a cor do raycast com base no tipo da entidade atingida.
+            # Quando não há entidade, usa a cor associada a ENTITY_NOTHING.
+            if raycast_result.entity is not None:
+                color, _ = color_and_fill_mappings[raycast_result.entity.type]
+            else:
+                color = (255, 0, 0) # vermelho
+
+            gfxdraw.line(
+                surface,
+                int(raycast_position[0]),
+                int(raycast_position[1]),
+                int(line_end_position[0]),
+                int(line_end_position[1]),
+                color,
+            )
+            gfxdraw.filled_circle(
+                surface,
+                int(line_end_position[0]),
+                int(line_end_position[1]),
+                int(0.5 * scale_x),
+                color,
+            )
 
         # desenha ações na tela
         if vehicle.get_velocity() is not None:

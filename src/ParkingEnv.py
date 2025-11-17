@@ -30,6 +30,7 @@ class ParkingEnv(gym.Env):
     DT = 0.5 # tempo de simulação
     MAX_SECONDS = 120.0
     MAX_STEPS = int(MAX_SECONDS / DT)
+    VEHICLE_PARKED_THRESHOLD_M = 5 # distancia minima para considerar o veículo estacionado
 
 
     ## recompensas
@@ -64,14 +65,21 @@ class ParkingEnv(gym.Env):
         
 
 
-        # Observation: [x, y, theta, beta, alpha, r1..r14, goal_x, goal_y, goal_theta]
+        # Observation: [theta, # ângulo de orientação do veículo
+        #              beta, # ângulo de articulação do trator-trailer
+        #              alpha, # ângulo de esterçamento do trator
+        #              r1..r14, # distâncias dos raycasts do veículo
+        #              e1..e14, # classes dos objetos detectados pelos raycasts (0: nada, 1: parede, 2: vaga de estacionamento)
+        #              goal_distance, # distância euclidiana do veículo ao objetivo
+        #              goal_direction, # ângulo de orientação do veículo em relação ao objetivo em radianos
         obs_low = np.array(
             [
                 -np.pi,                      # theta
                 -self.JACKKNIFE_LIMIT_RAD,        # beta
                 -self.STEERING_LIMIT_RAD,         # alpha
             ]
-            + [0.0] * self.vehicle.get_raycast_count()                     # raycasts
+            + [0.0] * self.vehicle.get_raycast_count()                     # raycast lengths
+            + [MapEntity.MIN_COLLIDABLE_ENTITY_TYPE] * self.vehicle.get_raycast_count() # raycast object classes
             + [0.0, -np.pi],            # goal distance, goal direction
             dtype=np.float32,
         )
@@ -82,7 +90,8 @@ class ParkingEnv(gym.Env):
                 self.JACKKNIFE_LIMIT_RAD,         # beta
                 self.STEERING_LIMIT_RAD,          # alpha
             ]
-            + [self.SENSOR_RANGE_M] * self.vehicle.get_raycast_count()          # raycasts
+            + [self.SENSOR_RANGE_M] * self.vehicle.get_raycast_count()          # raycast lengths
+            + [MapEntity.MAX_COLLIDABLE_ENTITY_TYPE] * self.vehicle.get_raycast_count() # raycast object classes
             + [100, np.pi], # goal distance, goal direction
             dtype=np.float32,
         )
@@ -123,10 +132,10 @@ class ParkingEnv(gym.Env):
         theta = self.vehicle.get_theta()
         beta = self.vehicle.get_beta()
         alpha_current = self.vehicle.get_alpha()
-        raycast_lengths = self.vehicle.get_raycast_lengths()
+        raycast_obs = self.vehicle.get_raycast_lengths_and_object_classes()
         goal_distance = self._calculate_goal_distance()
         goal_direction = self._calculate_goal_direction()
-        observation = np.array([theta, beta, alpha_current] + raycast_lengths + [goal_distance, goal_direction], dtype=np.float32)
+        observation = np.array([theta, beta, alpha_current] + raycast_obs + [goal_distance, goal_direction], dtype=np.float32)
         info = {}
         return observation, info
 
@@ -168,13 +177,12 @@ class ParkingEnv(gym.Env):
 
         self.last_distance_to_goal = new_distance_to_goal
 
-        # Observação: [x, y, theta, beta, alpha, r1..r14, goal_dist, goal_direction]
+        # Observação: [theta, beta, alpha, r1..r14, e1..e14, goal_dist, goal_direction]
         theta = self.vehicle.get_theta()
         beta = self.vehicle.get_beta()
         alpha_current = self.vehicle.get_alpha()
-        raycast_lengths = self.vehicle.get_raycast_lengths()
-        observation = np.array([theta, beta, alpha_current] + raycast_lengths + [self._calculate_goal_distance(), self._calculate_goal_direction()], dtype=np.float32)
-
+        raycast_obs = self.vehicle.get_raycast_lengths_and_object_classes()
+        observation = np.array([theta, beta, alpha_current] + raycast_obs + [self._calculate_goal_distance(), self._calculate_goal_direction()], dtype=np.float32)
         self.total_reward += reward
 
         return observation, reward, terminated, truncated, info
@@ -260,8 +268,7 @@ class ParkingEnv(gym.Env):
 
     def _check_vehicle_parking(self) -> bool:
         """Verifica se o trailer do veículo está dentro de uma vaga de estacionamento."""
-        goal = self.map.get_parking_goal()
-        if goal.get_bounding_box().contains_bounding_box(self.vehicle.get_bounding_box_trailer()):
+        if self._calculate_goal_distance() < self.VEHICLE_PARKED_THRESHOLD_M:
             return True
         return False
 

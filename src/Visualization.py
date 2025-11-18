@@ -1,3 +1,4 @@
+from turtle import colormode
 from typing import Iterable, List, Union
 from pathlib import Path
 import numpy as np
@@ -14,15 +15,36 @@ from pygame.font import Font
 # Initialize pygame.font before creating Font objects
 pygame.font.init()
 
-color_and_fill_mappings = {
-    MapEntity.ENTITY_NOTHING: ((255, 255, 255), False), ## branco
-    MapEntity.ENTITY_WALL: ((100, 100, 100), True), ## cinza
-    MapEntity.ENTITY_PARKING_SLOT: ((200, 200, 200), False), ## cinza claro
-    MapEntity.ENTITY_PARKING_GOAL: ((0, 255, 0), True), ## verde
-    MapEntity.ENTITY_START: ((255, 255, 0), True), ## amarelo
+color_mappings = {
+    MapEntity.ENTITY_NOTHING: ((255, 255, 255)), ## branco
+    MapEntity.ENTITY_WALL: ((20, 20, 20)), ## preto
+    MapEntity.ENTITY_PARKING_SLOT: ((200, 200, 200)), ## cinza claro
+    MapEntity.ENTITY_PARKING_GOAL: ((0, 255, 0)), ## verde
+    MapEntity.ENTITY_START: ((255, 255, 0)), ## amarelo
 }
 
 font = Font(None, 20)
+
+def _draw_arrow(surface: pygame.Surface, position: tuple[int, int], angle: float, length: float, width: float, color: tuple[int, int, int]) -> None:
+    # Draw main arrow shaft
+    arrow_x = int(position[0] + length * math.cos(angle))
+    arrow_y = int(position[1] + length * math.sin(angle))
+    pygame.draw.line(surface, color, position, (arrow_x, arrow_y), 2)
+    
+    # Calculate arrowhead points perpendicular to arrow direction
+    # Arrowhead angle (typically 30-45 degrees back from tip)
+    arrowhead_angle = math.pi / 6  # 30 degrees
+    arrowhead_length = width * 2
+    
+    # Left arrowhead line
+    left_x = int(arrow_x - arrowhead_length * math.cos(angle - arrowhead_angle))
+    left_y = int(arrow_y - arrowhead_length * math.sin(angle - arrowhead_angle))
+    pygame.draw.line(surface, color, (arrow_x, arrow_y), (left_x, left_y), 2)
+    
+    # Right arrowhead line
+    right_x = int(arrow_x - arrowhead_length * math.cos(angle + arrowhead_angle))
+    right_y = int(arrow_y - arrowhead_length * math.sin(angle + arrowhead_angle))
+    pygame.draw.line(surface, color, (arrow_x, arrow_y), (right_x, right_y), 2)
 
 
 def to_rgb_array(
@@ -78,14 +100,40 @@ def to_rgb_array(
     # Desenha cada entidade como o contorno do seu retângulo (bounding box)
 
     for entity in map.entities:
-        color, fill = color_and_fill_mappings[entity.type]
-        bbox = entity.get_bounding_box()
-        corners = bbox.get_corners()  # [(x,y), ...] em coords globais
-        # Converte coordenadas do espaço do mapa para pixels de saída
-        scaled_corners = [(x * scale_x, y * scale_y) for (x, y) in corners]
-        if fill:
+        if entity.type == MapEntity.ENTITY_PARKING_SLOT:
+            color = color_mappings[entity.type]
+            bbox = entity.get_bounding_box()
+            corners = bbox.get_corners()  # [(x,y), ...] em coords globais
+            # Converte coordenadas do espaço do mapa para pixels de saída
+            scaled_corners = [(x * scale_x, y * scale_y) for (x, y) in corners]
+            gfxdraw.aapolygon(surface, scaled_corners, color)
+            # desenha uma seta indicando a direção da vaga
+            scaled_position = (entity.position_x * scale_x, entity.position_y * scale_y)
+            _draw_arrow(surface, scaled_position, entity.theta, entity.length - 0.1, entity.width - 0.1, color_mappings[MapEntity.ENTITY_PARKING_SLOT])
+
+        elif entity.type == MapEntity.ENTITY_WALL:
+            color = color_mappings[entity.type]
+            bbox = entity.get_bounding_box()
+            corners = bbox.get_corners()  # [(x,y), ...] em coords globais
+            # Converte coordenadas do espaço do mapa para pixels de saída
+            scaled_corners = [(x * scale_x, y * scale_y) for (x, y) in corners]
             gfxdraw.filled_polygon(surface, scaled_corners, color)
-        else:
+            gfxdraw.aapolygon(surface, scaled_corners, color)
+        elif entity.type == MapEntity.ENTITY_PARKING_GOAL:
+            color = color_mappings[entity.type]
+            bbox = entity.get_bounding_box()
+            corners = bbox.get_corners()  # [(x,y), ...] em coords globais
+            # Converte coordenadas do espaço do mapa para pixels de saída
+            scaled_corners = [(x * scale_x, y * scale_y) for (x, y) in corners]
+            gfxdraw.filled_polygon(surface, scaled_corners, color)
+            gfxdraw.aapolygon(surface, scaled_corners, color)
+        elif entity.type == MapEntity.ENTITY_START:
+            color = color_mappings[entity.type]
+            bbox = entity.get_bounding_box()
+            corners = bbox.get_corners()  # [(x,y), ...] em coords globais
+            # Converte coordenadas do espaço do mapa para pixels de saída
+            scaled_corners = [(x * scale_x, y * scale_y) for (x, y) in corners]
+            gfxdraw.filled_polygon(surface, scaled_corners, color)
             gfxdraw.aapolygon(surface, scaled_corners, color)
 
     # Desenha as rodas do trator
@@ -131,7 +179,7 @@ def to_rgb_array(
             # Define a cor do raycast com base no tipo da entidade atingida.
             # Quando não há entidade, usa a cor associada a ENTITY_NOTHING.
             if raycast_result.entity is not None:
-                color, _ = color_and_fill_mappings[raycast_result.entity.type]
+                color = color_mappings[raycast_result.entity.type]
             else:
                 color = (255, 0, 0) # vermelho
 

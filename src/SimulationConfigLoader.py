@@ -84,19 +84,19 @@ class MapConfigLoader:
         max_parking_lots = 100 # máximo de vagas de estacionamento
         width = 150.0
         height = 150.0
-        width_wall = 2.0
-        width_parking_slot = 7.0
-        height_parking_slot = 12.0
+        width_wall = 4.0
+        width_parking_slot = 4.5
+        height_parking_slot = 15.0
         spawn_margin = min(20.0, width/2, height/2)
         map = Map((width, height))
         # parede esquerda
-        map.add_entity(MapEntity(position_x=0, position_y=height/2, width=width_wall, height=height, theta=0, type=MapEntity.ENTITY_WALL))
+        map.add_entity(MapEntity(position_x=0, position_y=height/2, width=width_wall, length=height, theta=math.pi/2, type=MapEntity.ENTITY_WALL))
         # parede direita
-        map.add_entity(MapEntity(position_x=width, position_y=height/2, width=width_wall, height=height, theta=0, type=MapEntity.ENTITY_WALL))
+        map.add_entity(MapEntity(position_x=width, position_y=height/2, width=width_wall, length=height, theta=-math.pi/2, type=MapEntity.ENTITY_WALL))
         # parede superior
-        map.add_entity(MapEntity(position_x=width/2, position_y=0, width=width, height=width_wall, theta=0, type=MapEntity.ENTITY_WALL))
+        map.add_entity(MapEntity(position_x=width/2, position_y=0, width=width_wall, length=width, theta=0.0, type=MapEntity.ENTITY_WALL))
         # parede inferior
-        map.add_entity(MapEntity(position_x=width/2, position_y=height, width=width, height=width_wall, theta=0, type=MapEntity.ENTITY_WALL))
+        map.add_entity(MapEntity(position_x=width/2, position_y=height, width=width_wall, length=width, theta=0.0, type=MapEntity.ENTITY_WALL))
 
         parking_lots_rows_heights = []
         parking_lots_row_spacing = 20.0
@@ -112,7 +112,7 @@ class MapConfigLoader:
         for row_height in parking_lots_rows_heights:
             parking_lots_start_x = spawn_margin + width_parking_slot/2
             while parking_lots_start_x < parking_lots_end_x:
-                new_parking_slot = MapEntity(position_x=parking_lots_start_x, position_y=row_height, width=width_parking_slot, height=height_parking_slot, theta=0, type=MapEntity.ENTITY_PARKING_SLOT)
+                new_parking_slot = MapEntity(position_x=parking_lots_start_x, position_y=row_height, width=width_parking_slot, length=height_parking_slot, theta=-math.pi/2, type=MapEntity.ENTITY_PARKING_SLOT)
                 map.add_entity(new_parking_slot)
                 parking_lots_start_x += width_parking_slot
 

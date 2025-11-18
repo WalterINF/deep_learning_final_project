@@ -163,20 +163,22 @@ class MapEntity:
     position_x: float 
     position_y: float
     width: float
-    height: float
+    length: float
     theta: float # ângulo em relação ao eixo x do mapa
     type: int
 
-    def __init__(self, position_x: float, position_y: float, width: float, height: float, theta: float, type: int = ENTITY_WALL):
+    def __init__(self, position_x: float, position_y: float, width: float, length: float, theta: float, type: int = ENTITY_WALL):
         self.position_x = position_x
         self.position_y = position_y
         self.width = width
-        self.height = height
+        self.length = length
         self.theta = theta
         self.type = type
 
     def get_bounding_box(self) -> BoundingBox:
-        return BoundingBox(self.position_x, self.position_y, self.width, self.height, self.theta)
+        # BoundingBox expects: (dimension_along_theta, dimension_perpendicular_to_theta)
+        # MapEntity: length is along theta, width is perpendicular to theta
+        return BoundingBox(self.position_x, self.position_y, self.length, self.width, self.theta)
 
     def to_value(self) -> int:
         return self.type
@@ -256,7 +258,7 @@ class ArticulatedVehicle():
         approx_width = max(self.largura_trator, self.largura_trailer, 0.0)
         approx_length = self.comprimento_trator + self.comprimento_trailer
         self.width = approx_width
-        self.height = approx_length
+        self.length = approx_length
 
         # Variáveis da simulação (mudam a cada passo)
         self.position_x_trator = 10.0
@@ -608,7 +610,8 @@ class Map:
         if self.start_position is None:
             raise Exception("Must add a start position to the map before placing a vehicle")
         start_pos = self.get_start_position()
-        start_theta = start_pos.theta + math.pi / 2
+        # Vehicle orientation matches the parking slot orientation (no offset needed)
+        start_theta = start_pos.theta
         vehicle.update_physical_properties(start_pos.position_x, start_pos.position_y, 0.0, start_theta, 0.0, 0.0)
         vehicle.initialize_raycasts()
         vehicle.update_raycasts(self.entities)

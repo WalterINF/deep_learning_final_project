@@ -55,4 +55,22 @@ class TestMapGeneration(unittest.TestCase):
         map.place_vehicle(vehicle)
         return map
 
+    def _generate_complex_map(self):
+        map = MapConfigLoader("config/lista_mapas.json").load_map("MAPA_COMPLEXO")
+        vehicle = VehicleConfigLoader("config/lista_veiculos.json").load_vehicle("BUG1")
+        map.place_vehicle(vehicle)
+        return map
+
+    def test_complex_map_generation(self):
+        map = self._generate_complex_map()
+        vehicle = VehicleConfigLoader("config/lista_veiculos.json").load_vehicle("BUG1")
+        map.place_vehicle(vehicle)
+        self.assertIsNotNone(map)
+        self.assertIsNotNone(map.get_start_position())
+        self.assertIsNotNone(map.get_parking_goal())
+
+        rgb_array = to_rgb_array(map, vehicle, img_size=(576, 576))
+        plt.imshow(rgb_array)
+        plt.show()
+
         

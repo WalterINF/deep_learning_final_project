@@ -111,7 +111,8 @@ class BoundingBox:
         return True
     
     def get_corners(self) -> list[tuple[float, float]]:
-        """Calcula os quatro cantos da bounding box em coordenadas globais"""
+        """Calcula os quatro cantos da bounding box em coordenadas globais,
+        na ordem: bottom-left, bottom-right, top-right, top-left"""
         # Half dimensions
         half_w = self.width / 2.0
         half_h = self.height / 2.0
@@ -342,19 +343,19 @@ class ArticulatedVehicle():
         # Concatena em um único array (lista Python) conforme especificação
         return raycast_lengths + raycast_object_classes
 
-    def get_position(self):
+    def get_position(self) -> tuple[float, float]:
         return self.position_x_trator, self.position_y_trator
 
-    def get_velocity(self):
+    def get_velocity(self) -> float:
         return self.velocity_trator
 
-    def get_theta(self):
+    def get_theta(self) -> float:
         return self.theta_trator
 
-    def get_beta(self):
+    def get_beta(self) -> float:
         return self.beta_trator
 
-    def get_alpha(self):
+    def get_alpha(self) -> float:
         return self.alpha_trator
 
     def get_comprimento_trator(self) -> float:

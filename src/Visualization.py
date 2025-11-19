@@ -107,6 +107,7 @@ def to_rgb_array(
             # Converte coordenadas do espaço do mapa para pixels de saída
             scaled_corners = [(x * scale_x, y * scale_y) for (x, y) in corners]
             gfxdraw.aapolygon(surface, scaled_corners, color)
+            gfxdraw.line(surface, int(scaled_corners[1][0]), int(scaled_corners[1][1]), int(scaled_corners[2][0]), int(scaled_corners[2][1]), (128, 128, 128))
             # desenha uma seta indicando a direção da vaga
             scaled_position = (entity.position_x * scale_x, entity.position_y * scale_y)
             _draw_arrow(surface, scaled_position, entity.theta, entity.length - 0.1, entity.width - 0.1, color_mappings[MapEntity.ENTITY_PARKING_SLOT])

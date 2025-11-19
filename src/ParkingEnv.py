@@ -13,6 +13,7 @@ import torch
 import os
 import tensorboard
 import numerize
+import math
 
 
 class ParkingEnv(gym.Env):
@@ -22,26 +23,26 @@ class ParkingEnv(gym.Env):
 
     ## ambiente
     VEHICLE_NAME = "BUG1" #nome do veículo
-    MAP_NAME = "MAPA_1" #nome do mapa
+    MAP_NAME = "MAPA_COMPLEXO" #nome do mapa
     SENSOR_RANGE_M = 20.0 # raio do sensor
     SPEED_LIMIT_MS = 5.0 # velocidade maxima
     STEERING_LIMIT_RAD = float(np.deg2rad(28.0)) # angulo maximo de esterçamento
     JACKKNIFE_LIMIT_RAD = float(np.deg2rad(65.0)) # angulo maximo de jackknife
-    DT = 0.5 # tempo de simulação
+    DT = 0.2 # tempo de simulação
     MAX_SECONDS = 120.0
     MAX_STEPS = int(MAX_SECONDS / DT)
-    VEHICLE_PARKED_THRESHOLD_M = 2 # distancia minima para considerar o veículo estacionado
+    VEHICLE_PARKED_THRESHOLD_M = 3.0 # distancia minima entre centro do trailer e centro da vaga para considerar o veículo estacionado
 
 
     ## recompensas
     REWARD_GOAL = 100.0 # recompensa por chegar ao objetivo
     REWARD_ALIGNMENT = 50.0 # recompensa adicional por alinhar o veículo na vaga corretamente
-    REWARD_PROGRESS = 50.0 # recompensa por progresso, calculado como (porcentagem de distancia ganha * REWARD_PROGRESS)
+    REWARD_PROGRESS = 50.0 # recompensa por progresso, calculado como (porcentagem de distancia ganha no passo * REWARD_PROGRESS)
     MAX_PUNISHMENT_TIME_PER_EPISODE = -20.0 # penalidade maxima por tempo acumulada durante o episódio
     PUNISHMENT_TIME = MAX_PUNISHMENT_TIME_PER_EPISODE / MAX_STEPS # penalidade por tempo a cada passo
     PUNISHMENT_ZERO_SPEED = 5 * PUNISHMENT_TIME # penalidade por velocidade zero - 5 vezes maior que a penalidade por tempo
     PUNISHMENT_COLLISION = -150.0 # penalidade por colisão com paredes
-    PUNISHMENT_OVERLAP = 20*PUNISHMENT_TIME # penalidade por invadir uma vaga dada a cada passo, 20 vezes maior que a penalidade por tempo
+    PUNISHMENT_OVERLAP = 20 * PUNISHMENT_TIME # penalidade por invadir uma vaga a cada passo, 20 vezes maior que a penalidade por tempo
     PUNISHMENT_JACKKNIFE = -150.0 # penalidade por jackknife
 
 
@@ -60,8 +61,8 @@ class ParkingEnv(gym.Env):
         self.steps = 0
         self.total_reward = 0.0
 
-        self.initial_distance_to_goal = self._calculate_goal_distance_manhattan()
-        self.last_distance_to_goal = self._calculate_goal_distance_manhattan()
+        self.initial_distance_to_goal = self._calculate_distance_manhattan(self.vehicle.get_position(), self.map.get_parking_goal_position())
+        self.last_distance_to_goal = self._calculate_distance_manhattan(self.vehicle.get_position(), self.map.get_parking_goal_position())
 
         
         # Observation: [theta,           # ângulo de orientação do veículo
@@ -69,7 +70,7 @@ class ParkingEnv(gym.Env):
         #              alpha,           # ângulo de esterçamento do trator
         #              r1..r14,         # distâncias dos raycasts do veículo
         #              e1..e14,         # classes dos objetos detectados pelos raycasts (0: nada, 1: parede, 2: vaga de estacionamento)
-        #              goal_distance,   # distância euclidiana do veículo ao objetivo
+        #              goal_distance,   # distância relativa do veículo ao objetivo em metros (disância atual/disância inicial)
         #              goal_direction,  # ângulo global em relação ao objetivo em radianos
         #              angle_diff]      # diferença de orientação entre a vaga de estacionamento e o veículo
         obs_low = np.array(
@@ -92,7 +93,7 @@ class ParkingEnv(gym.Env):
             ]
             + [self.SENSOR_RANGE_M] * self.vehicle.get_raycast_count()          # raycast lengths
             + [MapEntity.MAX_COLLIDABLE_ENTITY_TYPE] * self.vehicle.get_raycast_count() # raycast object classes
-            + [100, np.pi, np.pi], # goal distance, goal direction, angle_diff
+            + [200, np.pi, np.pi], # goal distance, goal direction, angle_diff
             dtype=np.float32,
         )
 
@@ -126,25 +127,30 @@ class ParkingEnv(gym.Env):
         self.steps = 0
         self.total_reward = 0.0
 
-        self.initial_distance_to_goal = self._calculate_goal_distance_manhattan()
-        self.last_distance_to_goal = self._calculate_goal_distance_manhattan()
+        self.initial_distance_to_goal = self._calculate_distance_manhattan(self.vehicle.get_position(), self.map.get_parking_goal_position())
+        self.last_distance_to_goal = self._calculate_distance_manhattan(self.vehicle.get_position(), self.map.get_parking_goal_position())
 
         # Build observation
+        observation = self._build_observation()
+        info = {}
+        return observation, info
+
+    def _build_observation(self) -> np.ndarray:
+        # Observação: [theta, beta, alpha, r1..r14, e1..e14, goal_dist, goal_direction, angle_diff]
         theta = self.vehicle.get_theta()
         beta = self.vehicle.get_beta()
         alpha_current = self.vehicle.get_alpha()
         raycast_obs = self.vehicle.get_raycast_lengths_and_object_classes()
-        goal_distance = self._calculate_goal_distance()
-        goal_direction = self._calculate_goal_direction()
-        angle_diff = self._calculate_angle_diff()
+        goal_distance = self._calculate_distance_euclidean(self.vehicle.get_position(), self.map.get_parking_goal_position())
+        goal_direction = self._calculate_goal_direction(self.vehicle.get_position(), self.map.get_parking_goal_position())
+        angle_diff = self._calculate_angle_diff(self.vehicle.get_theta(), self.map.get_parking_goal_theta())
         observation = np.array(
             [theta, beta, alpha_current]
             + raycast_obs
             + [goal_distance, goal_direction, angle_diff],
             dtype=np.float32,
         )
-        info = {}
-        return observation, info
+        return observation
 
     def step(self, action) -> tuple[np.ndarray, SupportsFloat, bool, bool, dict[str, Any]]:
         velocity, alpha = action
@@ -164,8 +170,8 @@ class ParkingEnv(gym.Env):
             truncated = True
         elif self._check_vehicle_parking():
             terminated = True
-            reward = self.REWARD_GOAL
-        elif self._check_trailer_jackknife():
+            reward = self._calculate_parking_reward(self.vehicle.get_theta(), self.map.get_parking_goal_theta())
+        elif self._check_trailer_jackknife(self.vehicle.get_beta()):
             terminated = True
             reward = self.PUNISHMENT_JACKKNIFE
         else:
@@ -176,7 +182,7 @@ class ParkingEnv(gym.Env):
             elif overlapped:
                 reward += self.PUNISHMENT_OVERLAP
  
-        new_distance_to_goal = self._calculate_goal_distance_manhattan()
+        new_distance_to_goal = self._calculate_distance_manhattan(self.vehicle.get_position(), self.map.get_parking_goal_position())
         #recompensa baseada no progresso real em relação à distancia inicial para o objetivo
         den = max(self.initial_distance_to_goal, 1e-6)
         progress_percentage = (self.last_distance_to_goal - new_distance_to_goal) / den
@@ -184,31 +190,17 @@ class ParkingEnv(gym.Env):
 
         self.last_distance_to_goal = new_distance_to_goal
 
-        # Observação: [theta, beta, alpha, r1..r14, e1..e14, goal_dist, goal_direction, angle_diff]
-        theta = self.vehicle.get_theta()
-        beta = self.vehicle.get_beta()
-        alpha_current = self.vehicle.get_alpha()
-        raycast_obs = self.vehicle.get_raycast_lengths_and_object_classes()
-        goal_distance = self._calculate_goal_distance()
-        goal_direction = self._calculate_goal_direction()
-        angle_diff = self._calculate_angle_diff()
-        observation = np.array(
-            [theta, beta, alpha_current]
-            + raycast_obs
-            + [goal_distance, goal_direction, angle_diff],
-            dtype=np.float32,
-        )
+        observation = self._build_observation()
         self.total_reward += reward
 
         return observation, reward, terminated, truncated, info
 
     def render(self):
-        rgb_array = Visualization.to_rgb_array(self.map, self.vehicle, (288, 288), self._calculate_goal_distance(), self._calculate_goal_direction(), total_reward=self.total_reward)
+        rgb_array = Visualization.to_rgb_array(self.map, self.vehicle, (288, 288), self._calculate_distance_euclidean(self.vehicle.get_position(), self.map.get_parking_goal_position()), self._calculate_goal_direction(self.vehicle.get_position(), self.map.get_parking_goal_position()), total_reward=self.total_reward)
         return rgb_array
 
     def close(self):
         pass
-
 
     def _move_vehicle(self, velocity: float, alpha: float, dt: float):
         # Current state
@@ -263,31 +255,23 @@ class ParkingEnv(gym.Env):
                     
 
 
-    def _calculate_goal_distance(self):
-        x, y = self.vehicle.get_trailer_position()
-        goal_x, goal_y = self.map.get_parking_goal_position()
-        distance_to_goal = np.sqrt((x - goal_x)**2 + (y - goal_y)**2)
+    def _calculate_distance_euclidean(self, position: tuple[float, float], goal_position: tuple[float, float]):
+        distance_to_goal = np.sqrt((position[0] - goal_position[0])**2 + (position[1] - goal_position[1])**2)
         return distance_to_goal
 
-    def _calculate_goal_distance_manhattan(self):
-        x, y = self.vehicle.get_trailer_position()
-        goal_x, goal_y = self.map.get_parking_goal_position()
-        distance_to_goal = abs(x - goal_x) + abs(y - goal_y)
+    def _calculate_distance_manhattan(self, position: tuple[float, float], goal_position: tuple[float, float]):
+        distance_to_goal = abs(position[0] - goal_position[0]) + abs(position[1] - goal_position[1])
         return distance_to_goal
 
-    def _calculate_goal_direction(self):
-        x, y = self.vehicle.get_position()
-        goal_x, goal_y = self.map.get_parking_goal_position()
-        direction_to_goal = np.arctan2(goal_y - y, goal_x - x)
+    def _calculate_goal_direction(self, position: tuple[float, float], goal_position: tuple[float, float]):
+        direction_to_goal = np.arctan2(goal_position[1] - position[1], goal_position[0] - position[0])
         return direction_to_goal
 
-    def _calculate_angle_diff(self):
+    def _calculate_angle_diff(self, vehicle_theta: float, parking_goal_theta: float):
         """
         Calcula a diferença de orientação entre a vaga de estacionamento (parking_goal_theta)
         e o veículo (vehicle_theta), normalizada para o intervalo [-pi, pi].
         """
-        vehicle_theta = self.vehicle.get_theta()
-        parking_goal_theta = self.map.get_parking_goal_theta()
         diff = parking_goal_theta - vehicle_theta
         # normaliza para [-pi, pi]
         angle_diff = np.arctan2(np.sin(diff), np.cos(diff))
@@ -295,10 +279,17 @@ class ParkingEnv(gym.Env):
 
     def _check_vehicle_parking(self) -> bool:
         """Verifica se o trailer do veículo está dentro de uma vaga de estacionamento."""
-        if self._calculate_goal_distance() < self.VEHICLE_PARKED_THRESHOLD_M:
-            return True
-        return False
+        return self._calculate_distance_euclidean(self.vehicle.get_position(), self.map.get_parking_goal_position()) < self.VEHICLE_PARKED_THRESHOLD_M
 
-    def _check_trailer_jackknife(self) -> bool:
+    def _calculate_parking_reward(self, vehicle_theta: float, parking_goal_theta: float) -> float:
+        """Calcula a recompensa por estacionar o veículo. valr máximo quando a diferença de orientação é 0
+        e valor mínimo quando a diferença de orientação é pi/2 ou maior"""
+        angle_diff = self._calculate_angle_diff(vehicle_theta, parking_goal_theta)
+        #se é maior que pi/2, considera 0
+        if abs(angle_diff) > math.pi/2:
+            return self.REWARD_GOAL
+        return self.REWARD_GOAL + (1 - (abs(angle_diff) / (math.pi/2))) * self.REWARD_ALIGNMENT
+
+    def _check_trailer_jackknife(self, beta: float) -> bool:
         """Verifica se o trailer do veículo está em jackknife."""
-        return self.vehicle.get_beta() > np.deg2rad(65.0) or self.vehicle.get_beta() < np.deg2rad(-65.0)
+        return abs(beta) > self.JACKKNIFE_LIMIT_RAD

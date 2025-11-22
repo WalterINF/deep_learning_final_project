@@ -2,6 +2,44 @@ import math
 import random
 from typing import Dict
 import numpy as np
+from math import tan, cos, sin
+
+class Simulation:
+    vehicle: "ArticulatedVehicle"
+    map: "Map"
+
+    def __init__(self, vehicle: "ArticulatedVehicle", map: "Map"):
+        self.vehicle = vehicle
+        self.map = map
+        self.map.place_vehicle(self.vehicle)
+
+    def move_vehicle(self, velocity: float, alpha: float, dt: float):
+        # Current state
+        x, y = self.vehicle.get_position()
+        theta = self.vehicle.get_theta()
+        beta = self.vehicle.get_beta()
+
+        # Geometry
+        D = self.vehicle.get_distancia_eixo_dianteiro_quinta_roda() - self.vehicle.get_distancia_eixo_traseiro_quinta_roda()
+        L = self.vehicle.get_distancia_eixo_traseiro_trailer_quinta_roda()
+        a = self.vehicle.get_distancia_eixo_traseiro_quinta_roda()
+
+        angular_velocity_tractor = (velocity / D) * tan(alpha)
+
+        # Kinematics
+        x_dot = velocity * cos(theta)
+        y_dot = velocity * sin(theta)
+        theta_dot = (velocity / D) * tan(alpha)
+        beta_dot = angular_velocity_tractor * (1 - (a * cos(beta)) / L) - (velocity * sin(beta)) / L
+
+        # Euler step
+        new_x = x + x_dot * dt
+        new_y = y + y_dot * dt
+        new_theta = theta + theta_dot * dt
+        new_beta = beta + beta_dot * dt
+
+        self.vehicle.update_physical_properties(new_x, new_y, velocity, new_theta, new_beta, alpha)
+        self.vehicle.update_raycasts(self.map.get_entities())
 
 
 class RaycastResult:
@@ -151,7 +189,7 @@ class MapEntity:
 
     ENTITY_COLLIDABLE_FLAGS = {
         ENTITY_WALL: True,
-        ENTITY_PARKING_SLOT: True,
+        ENTITY_PARKING_SLOT: False,
         ENTITY_PARKING_GOAL: False,
         ENTITY_START: False,
     }
@@ -309,7 +347,7 @@ class ArticulatedVehicle():
     def get_raycast_count(self) -> int:
         return len(self.raycast_positions_and_angle_offsets)
 
-    def get_raycast_lengths_and_object_classes(self) -> list[float]:
+    def get_raycast_lengths_and_object_classes(self) -> tuple[list[float], list[int]]:
         """
         Retorna um único array contendo, em ordem fixa e consistente:
         [r1_len, r2_len, ..., rN_len, r1_class, r2_class, ..., rN_class]
@@ -340,8 +378,7 @@ class ArticulatedVehicle():
 
             raycast_object_classes.append(obj_class)
 
-        # Concatena em um único array (lista Python) conforme especificação
-        return raycast_lengths + raycast_object_classes
+        return raycast_lengths, raycast_object_classes
 
     def get_position(self) -> tuple[float, float]:
         return self.position_x_trator, self.position_y_trator
@@ -599,6 +636,7 @@ class Map:
         return random.choice(self.get_parking_slots())
 
     def get_size(self) -> tuple[float, float]:
+        
         return (self.size_x, self.size_y)
 
 
@@ -611,9 +649,10 @@ class Map:
         if self.start_position is None:
             raise Exception("Must add a start position to the map before placing a vehicle")
         start_pos = self.get_start_position()
-        # Vehicle orientation matches the parking slot orientation (no offset needed)
         start_theta = start_pos.theta
-        vehicle.update_physical_properties(start_pos.position_x, start_pos.position_y, 0.0, start_theta, 0.0, 0.0)
+        start_x = start_pos.position_x + 2.0 *math.cos(start_theta)
+        start_y = start_pos.position_y + 2.0 *math.sin(start_theta)
+        vehicle.update_physical_properties(start_x, start_y, 0.0, start_theta, 0.0, 0.0)
         vehicle.initialize_raycasts()
         vehicle.update_raycasts(self.entities)
 
@@ -631,7 +670,7 @@ def fire_raycast(origin_x: float, origin_y: float, theta: float, range: float, e
     min_collision_distance = range
     min_collision_entity = None
     for entity in entities:
-        if entity.type == MapEntity.ENTITY_WALL or entity.type == MapEntity.ENTITY_PARKING_SLOT:
+        if entity.type == MapEntity.ENTITY_WALL: #or entity.type == MapEntity.ENTITY_PARKING_SLOT:
             collision_distance = check_raycast_collision(origin_x, origin_y, theta, range, entity.get_bounding_box())
             if collision_distance is not None:
                 if collision_distance < min_collision_distance:

@@ -13,13 +13,11 @@ class ParkingEnv(gym.Env):
 
 
     ## ambiente
-    VEHICLE_NAME = "BUG1" #nome do veículo
-    MAP_NAME = "MAPA_COMPLEXO" #nome do mapa
     SENSOR_RANGE_M = 10.0 # raio do sensor
     SPEED_LIMIT_MS = 5.0 # velocidade maxima
     STEERING_LIMIT_RAD = float(np.deg2rad(28.0)) # angulo maximo de esterçamento
     JACKKNIFE_LIMIT_RAD = float(np.deg2rad(65.0)) # angulo maximo de jackknife
-    DT = 0.2 # tempo de simulação
+    DT = 0.2 # tempo do passo de simulação
     MAX_SECONDS = 90.0
     MAX_STEPS = int(MAX_SECONDS / DT)
     VEHICLE_PARKED_THRESHOLD_M = 5.0 # distancia minima entre centro do trailer e centro da vaga para considerar o veículo estacionado

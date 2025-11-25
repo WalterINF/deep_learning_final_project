@@ -4,10 +4,9 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 import pygame
-from Simulation import Simulation, Map, ArticulatedVehicle
+from src.Simulation import Simulation, Map, ArticulatedVehicle, MapEntity
 import math
 from pygame import gfxdraw
-from Simulation import MapEntity
 from pygame.font import Font
 
 # Initialize pygame.font before creating Font objects

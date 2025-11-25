@@ -251,6 +251,7 @@ class ArticulatedVehicle():
     beta_trator: float # ângulo de articulação do trator-trailer
     raycast_results: Dict[str, RaycastResult] # raycasts do trator
 
+    ## lista de raycasts do trator e do trailer
     raycast_positions_and_angle_offsets = [
        # (nome,   origem,    ângulo de offset)
         ("r1", "tractor", 0.0), # 0 graus
@@ -337,9 +338,6 @@ class ArticulatedVehicle():
                     self.get_trailer_theta() + angle_offset, 
                     self.MAX_RAYCAST_LENGTH, 
                     entities)
-
-    def get_raycast_result(self, raycast_name: str) -> RaycastResult:
-        return self.raycast_results[raycast_name]
 
     def get_raycast_results(self) -> Dict[str, RaycastResult]:
         return self.raycast_results
@@ -539,16 +537,19 @@ class ArticulatedVehicle():
         return self.theta_trator + math.pi / 2
     
     def get_front_axle_position(self) -> tuple[float, float]:
+        """Retorna o ponto médio entre as rodas dianteiras do trator (centro do eixo dianteiro)"""
         front_axle_center_x = self.position_x_trator + self.distancia_eixo_dianteiro_quinta_roda * math.cos(self.theta_trator)
         front_axle_center_y = self.position_y_trator + self.distancia_eixo_dianteiro_quinta_roda * math.sin(self.theta_trator)
         return front_axle_center_x, front_axle_center_y
     
     def get_rear_axle_position(self) -> tuple[float, float]:
+        """Retorna o ponto médio entre as rodas traseiras do trator (centro do eixo traseiro)"""
         rear_axle_center_x = self.position_x_trator + self.distancia_eixo_traseiro_quinta_roda * math.cos(self.theta_trator)
         rear_axle_center_y = self.position_y_trator + self.distancia_eixo_traseiro_quinta_roda * math.sin(self.theta_trator)
         return rear_axle_center_x, rear_axle_center_y
     
     def get_wheels_bounding_boxes(self) -> list[BoundingBox]:
+        """Retorna as bounding boxes dos pneus do trator e do trailer"""
         # Center of the front axle (from rear axle by 'distancia_eixo_dianteiro_quinta_roda')
         front_axle_center_x, front_axle_center_y = self.get_front_axle_position()
 
@@ -627,27 +628,32 @@ class Map:
             self.entities.append(entity)
 
     def get_entities(self) -> list[MapEntity]:
+        """Retorna todas as entidades do mapa"""
         return self.entities
 
     def get_parking_slots(self) -> list[MapEntity]:
+        """Retorna todas as vagas de estacionamento do mapa"""
         return [entity for entity in self.entities if entity.type == MapEntity.ENTITY_PARKING_SLOT]
 
     def get_random_parking_slot(self) -> MapEntity:
+        """Retorna uma vaga de estacionamento aleatória"""
         return random.choice(self.get_parking_slots())
 
     def get_size(self) -> tuple[float, float]:
-        
+        """Retorna o tamanho do mapa"""
         return (self.size_x, self.size_y)
 
 
     def get_start_position(self) -> MapEntity:
+        """Retorna a posição de partida do mapa"""
         if self.start_position is None:
-            raise Exception("Must add a start position to the map before getting it")
+            raise Exception("Deve adicionar uma posição de partida ao mapa antes de obtê-la")
         return self.start_position
 
     def place_vehicle(self, vehicle: ArticulatedVehicle):
+        """Coloca o veículo no mapa na posição de partida"""
         if self.start_position is None:
-            raise Exception("Must add a start position to the map before placing a vehicle")
+            raise Exception("Deve adicionar uma posição de partida ao mapa antes de colocar um veículo")
         start_pos = self.get_start_position()
         start_theta = start_pos.theta
         start_x = start_pos.position_x + 2.0 *math.cos(start_theta)

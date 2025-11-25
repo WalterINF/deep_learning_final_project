@@ -1,5 +1,5 @@
 import unittest
-from ParkingEnv import ParkingEnv
+from src.ParkingEnv import ParkingEnv
 import numpy as np
 import math
 

@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict, List, Optional
 import os
-from Simulation import ArticulatedVehicle, Map, MapEntity, Simulation
+from src.Simulation import ArticulatedVehicle, Map, MapEntity, Simulation
 import random
 import math
 import numpy as np

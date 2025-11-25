@@ -18,6 +18,28 @@ Este projeto tem por objetivo implementar um algoritmo de aprendizado por refor�
 - NumPy
 - Casadi
 
+### Estrutura do repositório
+├── codigos
+├── logs: diretório para logs do TensorBoard
+├── models: diretório para modelos treinados
+├── README.md: este arquivo
+├── requirements.txt: arquivo de dependências do projeto
+├── scripts: diretório para scripts auxiliares uteis para treinamento
+│   ├── clear_logs_models.py: script para limpar logs e modelos treinados
+│   └── launch_tensorboard.py: script para iniciar o TensorBoard
+├── src: diretório para códigos do projeto final de AGL10225 - Aprendizado Por Reforço
+│   ├── ParkingEnv.py: classe do ambiente de simulação
+│   ├── ParkingVehicle.ipynb: notebook de treinamento e teste do agente
+│   ├── test: diretório para testes unitários
+│   │   ├── conftest.py: arquivo de configuração para os testes
+│   │   ├── test_collisions.py: teste de colisões
+│   │   ├── test_env.py: teste do ambiente
+│   │   └── test_map_generation.py: teste de geração do mapa (gera imagens de 3 mapas diferentes)
+│   ├── train.py: script para treinar o modelo
+│   ├── video: diretório para vídeos de avaliação do agente
+│   └── Visualization.py: classe para renderização das simulações (e gravação de vídeos)
+└── veiculo_com_os_raycast.png: imagem do veículo com os raycasts
+
 
 ### Ambiente 
 
@@ -28,15 +50,16 @@ O agente deve posicionar o trailer sobre o objetivo, que é uma vaga de estacion
 
 #### Espaço de observação (o que o agente observa)
 
-Estado: [theta, beta, alpha*, [r1, r2, ..., r14], [c1, c2, ..., c14], goal_proximity, goal_direction], onde:
-* theta: ângulo de orientação do veiculo.
+Estado: [velocity, theta, beta, alpha*, [r1, r2, ..., r14], goal_proximity, goal_direction_relative, tractor_angle_diff, trailer_angle_diff], onde:
+* velocity: velocidade atual do veículo normalizada [-1, 1].
+* theta: ângulo de orientação do trator.
 * beta: ângulo relativo entre o trator e o trailer.
 * alpha*: ângulo de esterçamento do trator.
-* r1, ..., r14: distâncias dos raycasts posicionados com origem no veiculo.
-* c1, ..., c14: classes dos objetos detectados pelos raycasts (parede, vaga...)
+* r1, ..., r14: distâncias dos raycasts posicionados com origem no veiculo (normalizadas 0-1).
 * goal_proximity: proximidade do veículo ao objetivo, calculada como 1 / (1 + distância euclidiana).
-* goal_direction: direção até o objetivo em radianos.
-* angle_diff: diferença entre a orientação davaga de estacionamento e a orientação do veículo em radianos.
+* goal_direction_relative: direção até o objetivo RELATIVA ao heading do veículo (egocêntrica).
+* tractor_angle_diff: diferença entre a orientação do trator e a orientação da vaga.
+* trailer_angle_diff: diferença entre a orientação do TRAILER e a orientação da vaga (crítico para estacionamento).
     
 ![veiculo com raycasts](veiculo_com_os_raycast.png)
 
@@ -48,13 +71,16 @@ Controle: [v, alpha], onde:
 * alpha: ângulo de esterçamento do trator.
 
 #### Função de recompensa (o que o agente recebe)
-* +50 por compleção do objetivo (estacionar na vaga de destino)
-* +50 por alinhar o veículo na vaga corretamente ao estacionar
-* -100 por colisão com obstáculos - incluindo outras vagas de estacionamento que não sejam a de origem ou destino - ou com o próprio veículo
+* +150 por compleção do objetivo (estacionar na vaga de destino)
+* +50 por alinhar o trailer na vaga corretamente ao estacionar (baseado na orientação do trailer)
+* +2.0 por metro de progresso em direção ao objetivo
+* +0.3 por apontar em direção ao objetivo durante a fase de aproximação (heading reward)
+* Recompensa densa de alinhamento do trailer ponderada pela proximidade
+* -100 por colisão com paredes ou obstáculos
 * -100 por jackknife
-* -50 por esgotar o tempo limite do episódio, divido entre os passos de tempo: (-20/MAX_STEPS) por passo
-* -1*PUNISHMENT_TIME por passo de tempo por velocidade zero
-* -3*PUNISHMENT_TIME por passo de tempo por invadir uma vaga
+* -10 distribuídos ao longo do episódio como penalidade por tempo: (-10/MAX_STEPS) por passo
+* -0.1 por velocidade zero (penalidade por ficar parado)
+* -0.02 por mudança brusca de esterçamento (smoothness penalty)
 
 #### critérios de parada
 * colisão com obstáculos - incluindo outras vagas de estacionamento que não sejam a de origem ou destino - com o próprio veículo ou paredes do ambiente

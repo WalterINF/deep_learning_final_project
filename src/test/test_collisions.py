@@ -1,5 +1,5 @@
 import unittest
-from Simulation import BoundingBox
+from src.Simulation import BoundingBox
 import math
 
 class TestCollisions(unittest.TestCase):

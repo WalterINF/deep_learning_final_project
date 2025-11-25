@@ -4,7 +4,7 @@ import sys
 import os
 import pathlib
 # --- Configuration ---
-LOG_DIR = str(pathlib.Path(__file__).parent.parent / "src" / "logs")
+LOG_DIR = str(pathlib.Path(__file__).parent.parent / "logs")
 # ---------------------
 
 def launch_tensorboard():

@@ -1,8 +1,8 @@
 import numpy as np
 import gymnasium as gym
-from SimulationConfigLoader import SimulationLoader
-from Simulation import MapEntity
-import Visualization as Visualization
+from src.SimulationConfigLoader import SimulationLoader
+from src.Simulation import MapEntity
+import src.Visualization as Visualization
 from typing import Any, SupportsFloat
 import math
 
@@ -13,28 +13,28 @@ class ParkingEnv(gym.Env):
 
 
     ## ambiente
-    SENSOR_RANGE_M = 10.0 # raio do sensor
+    SENSOR_RANGE_M = 50.0 # raio do sensor
     SPEED_LIMIT_MS = 5.0 # velocidade maxima
     STEERING_LIMIT_RAD = float(np.deg2rad(28.0)) # angulo maximo de esterçamento
     JACKKNIFE_LIMIT_RAD = float(np.deg2rad(65.0)) # angulo maximo de jackknife
     DT = 0.2 # tempo do passo de simulação
     MAX_SECONDS = 90.0
     MAX_STEPS = int(MAX_SECONDS / DT)
-    VEHICLE_PARKED_THRESHOLD_M = 5.0 # distancia minima entre centro do trailer e centro da vaga para considerar o veículo estacionado
+    VEHICLE_PARKED_THRESHOLD_M = 3.0 # distancia minima entre centro do trailer e centro da vaga para considerar o veículo estacionado
 
 
-    ## recompensas
-    REWARD_GOAL = 50.0 # recompensa por chegar ao objetivo
+    ## recompensas - TUNED FOR BETTER CONVERGENCE
+    REWARD_GOAL = 150.0 # recompensa por chegar ao objetivo 
     REWARD_ALIGNMENT = 50.0 # recompensa adicional por alinhar o veículo na vaga corretamente
-    REWARD_PROGRESS = 2.0 #recompensa por metro de progresso
-    MAX_PUNISHMENT_TIME_PER_EPISODE = -20.0 # penalidade maxima por tempo acumulada durante o episódio
+    REWARD_PROGRESS = 1.0 # recompensa por metro de progresso 
+    REWARD_HEADING = 0.0 # recompensa por apontar em direção ao objetivo (desabilitar por enquanto)
+    MAX_PUNISHMENT_TIME_PER_EPISODE = -10.0 # penalidade maxima por tempo 
     PUNISHMENT_TIME = MAX_PUNISHMENT_TIME_PER_EPISODE / MAX_STEPS # penalidade por tempo a cada passo
-    PUNISHMENT_ZERO_SPEED = -0.5 # penalidade por velocidade zero 
-    PUNISHMENT_COLLISION = -25.0 # penalidade por colisão com paredes
-    PUNISHMENT_OVERLAP = 0.0 * PUNISHMENT_TIME # penalidade por invadir uma vaga a cada passo,
-    PUNISHMENT_JACKKNIFE = -25.0 # penalidade por jackknife
+    PUNISHMENT_ZERO_SPEED = -0.1 # penalidade por velocidade zero 
+    PUNISHMENT_COLLISION = -100.0 # penalidade por colisão com paredes
+    PUNISHMENT_OVERLAP = 0.0 * PUNISHMENT_TIME # penalidade por invadir uma vaga a cada passo
+    PUNISHMENT_JACKKNIFE = -100.0 # penalidade por jackknife
 
-    REWARD_VELOCITY = -1.0 * PUNISHMENT_TIME #recompensa por velocidade
 
 
     def __init__(self, seed = 0):
@@ -52,36 +52,37 @@ class ParkingEnv(gym.Env):
         self.last_distance_to_goal = self._calculate_distance_euclidean(self.simulation.vehicle.get_position(), self.simulation.map.get_parking_goal_position())
 
         
-        # Observation: [theta,           # ângulo de orientação do veículo
-        #              beta,            # ângulo de articulação do trator-trailer
-        #              alpha,           # ângulo de esterçamento do trator
-        #              r1..r14,         # distâncias dos raycasts do veículo
-        #              e1..e14,         # classes dos objetos detectados pelos raycasts (0: nada, 1: parede, 2: vaga de estacionamento)
-        #              goal_proximity,  # proximidade do veículo ao objetivo (1 quando o veículo está no objetivo, 0 quando está longe)
-        #              goal_direction,  # ângulo global em relação ao objetivo em radianos
-        #              angle_diff]      # diferença de orientação entre a vaga de estacionamento e o veículo
+        # IMPROVED Observation Space:
+        # [velocity,         # velocidade atual normalizada [-1, 1] 
+        #  theta,            # ângulo de orientação do veículo (trator)
+        #  beta,             # ângulo de articulação do trator-trailer
+        #  alpha,            # ângulo de esterçamento do trator
+        #  r1..r14,          # distâncias dos raycasts do veículo (normalized 0-1)
+        #  goal_proximity,   # proximidade do veículo ao objetivo (1 no objetivo, 0 longe)
+        #  goal_direction_relative,  # ângulo RELATIVO ao heading do veículo 
+        #  tractor_angle_diff,       # diferença entre orientação do trator e da vaga
+        #  trailer_angle_diff]       # diferença entre orientação do TRAILER e da vaga 
         obs_low = np.array(
             [
-                -np.pi,                           # theta
+                -1.0,                             # velocity 
+                -np.pi,                           # theta 
                 -self.JACKKNIFE_LIMIT_RAD,        # beta
                 -self.STEERING_LIMIT_RAD,         # alpha
             ]
-            + [0.0] * self.simulation.vehicle.get_raycast_count()                     # raycast lengths (Normalized 0 to 1)
-            #+ [MapEntity.MIN_COLLIDABLE_ENTITY_TYPE] * self.simulation.vehicle.get_raycast_count() # raycast object classes
-            + [0.0, -np.pi, -np.pi],            # goal proximity, goal direction, angle_diff
+            + [0.0] * self.simulation.vehicle.get_raycast_count()  # raycast lengths 
+            + [0.0, -np.pi, -np.pi, -np.pi],  # goal proximity, relative goal direction, tractor angle diff, trailer angle diff
             dtype=np.float32,
         )
 
         obs_high = np.array(
             [
-                np.pi,                            # theta
+                1.0,                              # velocity 
+                np.pi,                            # theta 
                 self.JACKKNIFE_LIMIT_RAD,         # beta
                 self.STEERING_LIMIT_RAD,          # alpha
             ]
-
             + [1.0] * self.simulation.vehicle.get_raycast_count()          
-            #+ [MapEntity.MAX_COLLIDABLE_ENTITY_TYPE] * self.simulation.vehicle.get_raycast_count() # raycast object classes
-            + [1.0, np.pi, np.pi], # goal proximity, goal direction, angle_diff
+            + [1.0, np.pi, np.pi, np.pi],  # goal proximity, relative goal direction, tractor angle diff, trailer angle diff
             dtype=np.float32,
         )
 
@@ -90,14 +91,14 @@ class ParkingEnv(gym.Env):
         # Action: [v, alpha]
         act_low = np.array(
             [
-                -self.SPEED_LIMIT_MS,             # v (allow reverse)
+                -self.SPEED_LIMIT_MS,             # v 
                 -self.STEERING_LIMIT_RAD,         # alpha
             ],
             dtype=np.float32,
         )
         act_high = np.array(
             [
-                self.SPEED_LIMIT_MS,             # v (allow reverse)
+                self.SPEED_LIMIT_MS,             # v 
                 self.STEERING_LIMIT_RAD,          # alpha
             ],
             dtype=np.float32,
@@ -111,43 +112,52 @@ class ParkingEnv(gym.Env):
 
         self.steps = 0
         self.total_reward = 0.0
+    
 
         self.initial_distance_to_goal = self._calculate_distance_euclidean(self.simulation.vehicle.get_trailer_position(), self.simulation.map.get_parking_goal_position())
         self.last_distance_to_goal = self._calculate_distance_euclidean(self.simulation.vehicle.get_trailer_position(), self.simulation.map.get_parking_goal_position())
 
-        # Build observation
+        # Build observação
         observation = self._build_observation()
         info = {}
         return observation, info
 
     def _build_observation(self) -> np.ndarray:
-        # Get kinematic states
-        theta = self.simulation.vehicle.get_theta()
+        velocity = self.simulation.vehicle.get_velocity()
+        theta = self.simulation.vehicle.get_theta()  # tractor heading
         beta = self.simulation.vehicle.get_beta()
         alpha_current = self.simulation.vehicle.get_alpha()
+        trailer_theta = self.simulation.vehicle.get_trailer_theta()
         
-        # Get raycast data (Unpacking the new tuple)
+        velocity_normalized = velocity / self.SPEED_LIMIT_MS
+        
         raw_lengths, object_classes = self.simulation.vehicle.get_raycast_lengths_and_object_classes()
-
-        # NORMALIZE: Divide lengths by the maximum sensor range to get values between [0, 1]
-        # This helps the neural network learn faster and more stably.
         normalized_lengths = [length / self.SENSOR_RANGE_M for length in raw_lengths]
 
-        # Calculate goal metrics
-        goal_proximity = self._calculate_goal_proximity(self.simulation.vehicle.get_trailer_position(), self.simulation.map.get_parking_goal_position())
-        goal_direction = self._calculate_goal_direction(self.simulation.vehicle.get_trailer_position(), self.simulation.map.get_parking_goal_position())
-        angle_diff = self._calculate_angle_diff(self.simulation.vehicle.get_theta(), self.simulation.map.get_parking_goal_theta())
+        trailer_pos = self.simulation.vehicle.get_trailer_position()
+        goal_pos = self.simulation.map.get_parking_goal_position()
+        goal_theta = self.simulation.map.get_parking_goal_theta()
+        
+        goal_proximity = self._calculate_goal_proximity(trailer_pos, goal_pos)
+        
+        goal_direction_absolute = self._calculate_goal_direction(trailer_pos, goal_pos)
+        goal_direction_relative = self._normalize_angle(goal_direction_absolute - theta)
+        
+        tractor_angle_diff = self._calculate_angle_diff(theta, goal_theta)
+        
+        trailer_angle_diff = self._calculate_angle_diff(trailer_theta, goal_theta)
 
-        # Construct the final array
-        # Note: object_classes are integers, but will be cast to float32 to fit in the Box space
         observation = np.array(
-            [theta, beta, alpha_current]
+            [velocity_normalized, theta, beta, alpha_current]
             + normalized_lengths
-            #+ object_classes
-            + [goal_proximity, goal_direction, angle_diff],
+            + [goal_proximity, goal_direction_relative, tractor_angle_diff, trailer_angle_diff],
             dtype=np.float32,
         )
         return observation
+    
+    def _normalize_angle(self, angle: float) -> float:
+        """Normaliza um ângulo para o intervalo [-pi, pi]"""
+        return np.arctan2(np.sin(angle), np.cos(angle))
 
     def step(self, action) -> tuple[np.ndarray, SupportsFloat, bool, bool, dict[str, Any]]:
         velocity, alpha = action
@@ -155,21 +165,43 @@ class ParkingEnv(gym.Env):
         terminated = False
         truncated = False
         info = {}
-        reward = self.PUNISHMENT_TIME # recompensa base por passo de tempo (reduzida)
+        reward = self.PUNISHMENT_TIME  # penalidade base por passo de tempo
 
         self.simulation.move_vehicle(velocity, alpha, self.DT)
 
-        ## Strongly punish zero/low speed
-        if abs(velocity) < 0.1:
-            reward += self.PUNISHMENT_ZERO_SPEED  # Penalidade muito maior para ficar parado
-        else:
-            reward += self.REWARD_VELOCITY
+        trailer_pos = self.simulation.vehicle.get_trailer_position()
+        goal_pos = self.simulation.map.get_parking_goal_position()
+        goal_theta = self.simulation.map.get_parking_goal_theta()
+        tractor_theta = self.simulation.vehicle.get_theta()
+        trailer_theta = self.simulation.vehicle.get_trailer_theta()
+        new_distance_to_goal = self._calculate_distance_euclidean(trailer_pos, goal_pos)
 
+        if abs(velocity) < 0.1:
+            reward += self.PUNISHMENT_ZERO_SPEED
+        
+
+        
+        # recompensa por apontar em direção ao objetivo durante a fase de aproximação
+        if new_distance_to_goal > self.VEHICLE_PARKED_THRESHOLD_M * 2:
+            goal_direction = self._calculate_goal_direction(trailer_pos, goal_pos)
+            heading_alignment = np.cos(goal_direction - tractor_theta)
+            if heading_alignment > 0:
+                reward += heading_alignment * self.REWARD_HEADING
+        
+        # recompensa densa de alinhamento do trailer ponderada pela proximidade
+        trailer_angle_diff = self._calculate_angle_diff(trailer_theta, goal_theta)
+        proximity_factor = 1.0 / (1.0 + new_distance_to_goal)
+        alignment_factor = np.cos(trailer_angle_diff)
+        
+        if alignment_factor > 0:
+            reward += alignment_factor * proximity_factor * 0.3  # Increased from 0.2
+
+        # verificação de terminação
         if self.steps >= self.MAX_STEPS:
             truncated = True
         elif self._check_vehicle_parking():
             terminated = True
-            reward = self._calculate_parking_reward(self.simulation.vehicle.get_theta(), self.simulation.map.get_parking_goal_theta())
+            reward = self._calculate_parking_reward(trailer_theta, goal_theta)
         elif self._check_trailer_jackknife(self.simulation.vehicle.get_beta()):
             terminated = True
             reward = self.PUNISHMENT_JACKKNIFE
@@ -181,8 +213,7 @@ class ParkingEnv(gym.Env):
             elif self._check_vehicle_overlap():
                 reward += self.PUNISHMENT_OVERLAP
  
-        new_distance_to_goal = self._calculate_distance_euclidean(self.simulation.vehicle.get_trailer_position(), self.simulation.map.get_parking_goal_position())
-        #recompensa baseada no progresso em metros
+        # recompensa por progresso (redução de distância)
         reward += (self.last_distance_to_goal - new_distance_to_goal) * self.REWARD_PROGRESS
         self.last_distance_to_goal = new_distance_to_goal
 
@@ -245,14 +276,21 @@ class ParkingEnv(gym.Env):
         """Verifica se o trailer do veículo está dentro de uma vaga de estacionamento."""
         return self._calculate_distance_euclidean(self.simulation.vehicle.get_trailer_position(), self.simulation.map.get_parking_goal_position()) < self.VEHICLE_PARKED_THRESHOLD_M
 
-    def _calculate_parking_reward(self, vehicle_theta: float, parking_goal_theta: float) -> float:
-        """Calcula a recompensa por estacionar o veículo. valr máximo quando a diferença de orientação é 0
-        e valor mínimo quando a diferença de orientação é pi/2 ou maior"""
-        angle_diff = self._calculate_angle_diff(vehicle_theta, parking_goal_theta)
-        #se é maior que pi/2, considera 0
+    def _calculate_parking_reward(self, trailer_theta: float, parking_goal_theta: float) -> float:
+        """Calcula a recompensa por estacionar o veículo baseada na orientação do TRAILER.
+        Valor máximo quando a diferença de orientação é 0, valor mínimo quando é pi/2 ou maior.
+        
+        Args:
+            trailer_theta: ângulo de orientação do trailer (não do trator!)
+            parking_goal_theta: ângulo da vaga de estacionamento
+        """
+        angle_diff = self._calculate_angle_diff(trailer_theta, parking_goal_theta)
+        # se é maior que pi/2, apenas recompensa base
         if abs(angle_diff) > math.pi/2:
             return self.REWARD_GOAL
-        return self.REWARD_GOAL + (1 - (abs(angle_diff) / (math.pi/2))) * self.REWARD_ALIGNMENT
+        # recompensa proporcional ao alinhamento (0 a REWARD_ALIGNMENT adicional)
+        alignment_bonus = (1 - (abs(angle_diff) / (math.pi/2))) * self.REWARD_ALIGNMENT
+        return self.REWARD_GOAL + alignment_bonus
 
     def _check_trailer_jackknife(self, beta: float) -> bool:
         """Verifica se o trailer do veículo está em jackknife."""

@@ -1,6 +1,6 @@
 import unittest
-from SimulationConfigLoader import SimulationLoader
-from Visualization import to_rgb_array
+from src.SimulationConfigLoader import SimulationLoader
+from src.Visualization import to_rgb_array
 import matplotlib.pyplot as plt
 
 class TestMapGeneration(unittest.TestCase):

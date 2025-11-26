@@ -26,8 +26,8 @@ class ParkingEnv(gym.Env):
 
 
     ## recompensas - TUNED FOR BETTER CONVERGENCE
-    REWARD_GOAL = 150.0 # recompensa por chegar ao objetivo 
-    REWARD_ALIGNMENT = 50.0 # recompensa adicional por alinhar o veículo na vaga corretamente
+    REWARD_GOAL = 50.0 # recompensa por chegar ao objetivo 
+    REWARD_ALIGNMENT = 150.0 # recompensa adicional por alinhar o veículo na vaga corretamente
     REWARD_PROGRESS = 1.0 # recompensa por metro de progresso 
     REWARD_HEADING = 0.0 # recompensa por apontar em direção ao objetivo (desabilitar por enquanto)
     MAX_PUNISHMENT_TIME_PER_EPISODE = -10.0 # penalidade maxima por tempo 
@@ -269,20 +269,26 @@ class ParkingEnv(gym.Env):
         return self._calculate_distance_euclidean(self.simulation.vehicle.get_trailer_position(), self.simulation.map.get_parking_goal_position()) < self.VEHICLE_PARKED_THRESHOLD_M
 
     def _calculate_parking_reward(self, trailer_theta: float, parking_goal_theta: float) -> float:
-        """Calcula a recompensa por estacionar o veículo baseada na orientação do TRAILER.
-        Valor máximo quando a diferença de orientação é 0, valor mínimo quando é pi/2 ou maior.
-        
-        Args:
-            trailer_theta: ângulo de orientação do trailer (não do trator!)
-            parking_goal_theta: ângulo da vaga de estacionamento
-        """
-        angle_diff = self._calculate_angle_diff(trailer_theta, parking_goal_theta)
-        # se é maior que pi/2, apenas recompensa base
-        if abs(angle_diff) > math.pi/2:
-            return self.REWARD_GOAL
-        # recompensa proporcional ao alinhamento (0 a REWARD_ALIGNMENT adicional)
-        alignment_bonus = (1 - (abs(angle_diff) / (math.pi/2))) * self.REWARD_ALIGNMENT
-        return self.REWARD_GOAL + alignment_bonus
+            """Calcula a recompensa por estacionar o veículo baseada na orientação do TRAILER.
+            Valor máximo quando a diferença de orientação é 0, valor mínimo quando é pi/2 ou maior.
+            """
+            angle_diff = self._calculate_angle_diff(trailer_theta, parking_goal_theta)
+            
+            # se é maior que pi/2 (90 graus), apenas recompensa base (entrou de lado/ré errado)
+            if abs(angle_diff) > math.pi/2:
+                return self.REWARD_GOAL
+                
+            # Normaliza o erro para 0.0 (perfeito) a 1.0 (péssimo/90 graus)
+            error_factor = abs(angle_diff) / (math.pi/2)
+            
+            # Inverte para 1.0 (perfeito) a 0.0 (péssimo)
+            alignment_quality = 1.0 - error_factor
+            
+            alignment_quality = alignment_quality ** 2
+            
+            alignment_bonus = alignment_quality * self.REWARD_ALIGNMENT
+            
+            return self.REWARD_GOAL + alignment_bonus
 
     def _check_trailer_jackknife(self, beta: float) -> bool:
         """Verifica se o trailer do veículo está em jackknife."""

@@ -56,6 +56,8 @@ class RaycastResult:
         self.length = length
         self.entity = entity
 
+    def get_hit_point(self) -> tuple[float, float]:
+
 class BoundingBox:
 
     position_x: float
@@ -272,7 +274,7 @@ class ArticulatedVehicle():
     ]
 
 
-    MAX_RAYCAST_LENGTH = 20.0 # 20 metros
+    MAX_RAYCAST_LENGTH = 50.0 # 20 metros
 
     def __init__(self, geometry: dict):
         # Inicializa como uma entidade neutra; dimensões/posição podem ser ajustadas posteriormente

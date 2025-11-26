@@ -56,8 +56,6 @@ class RaycastResult:
         self.length = length
         self.entity = entity
 
-    def get_hit_point(self) -> tuple[float, float]:
-
 class BoundingBox:
 
     position_x: float

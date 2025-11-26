@@ -5,6 +5,7 @@ from src.Simulation import MapEntity
 import src.Visualization as Visualization
 from typing import Any, SupportsFloat
 import math
+from collections import deque
 
 
 class ParkingEnv(gym.Env):
@@ -13,6 +14,7 @@ class ParkingEnv(gym.Env):
 
 
     ## ambiente
+    GRID_RESOLUTION = 1.0  # Resolução do grid em metros para o pathfinding
     SENSOR_RANGE_M = 50.0 # raio do sensor
     SPEED_LIMIT_MS = 5.0 # velocidade maxima
     STEERING_LIMIT_RAD = float(np.deg2rad(28.0)) # angulo maximo de esterçamento
@@ -45,11 +47,14 @@ class ParkingEnv(gym.Env):
 
         self.simulation = self.simulation_loader.load_simulation()
 
+        self._compute_navigation_map()
+
         self.steps = 0
         self.total_reward = 0.0
+    
 
-        self.initial_distance_to_goal = self._calculate_distance_euclidean(self.simulation.vehicle.get_position(), self.simulation.map.get_parking_goal_position())
-        self.last_distance_to_goal = self._calculate_distance_euclidean(self.simulation.vehicle.get_position(), self.simulation.map.get_parking_goal_position())
+        self.initial_distance_to_goal = self._get_geodesic_distance(self.simulation.vehicle.get_trailer_position())
+        self.last_distance_to_goal = self.initial_distance_to_goal
 
         
         # IMPROVED Observation Space:
@@ -109,6 +114,8 @@ class ParkingEnv(gym.Env):
         super().reset(seed=seed)
 
         self.simulation = self.simulation_loader.load_simulation()
+
+        self._compute_navigation_map()
 
         self.steps = 0
         self.total_reward = 0.0
@@ -174,27 +181,12 @@ class ParkingEnv(gym.Env):
         goal_theta = self.simulation.map.get_parking_goal_theta()
         tractor_theta = self.simulation.vehicle.get_theta()
         trailer_theta = self.simulation.vehicle.get_trailer_theta()
-        new_distance_to_goal = self._calculate_distance_euclidean(trailer_pos, goal_pos)
 
         if abs(velocity) < 0.1:
             reward += self.PUNISHMENT_ZERO_SPEED
         
-
+        new_distance_to_goal = self._get_geodesic_distance(trailer_pos)
         
-        # recompensa por apontar em direção ao objetivo durante a fase de aproximação
-        if new_distance_to_goal > self.VEHICLE_PARKED_THRESHOLD_M * 2:
-            goal_direction = self._calculate_goal_direction(trailer_pos, goal_pos)
-            heading_alignment = np.cos(goal_direction - tractor_theta)
-            if heading_alignment > 0:
-                reward += heading_alignment * self.REWARD_HEADING
-        
-        # recompensa densa de alinhamento do trailer ponderada pela proximidade
-        trailer_angle_diff = self._calculate_angle_diff(trailer_theta, goal_theta)
-        proximity_factor = 1.0 / (1.0 + new_distance_to_goal)
-        alignment_factor = np.cos(trailer_angle_diff)
-        
-        if alignment_factor > 0:
-            reward += alignment_factor * proximity_factor * 0.3  # Increased from 0.2
 
         # verificação de terminação
         if self.steps >= self.MAX_STEPS:
@@ -295,3 +287,85 @@ class ParkingEnv(gym.Env):
     def _check_trailer_jackknife(self, beta: float) -> bool:
         """Verifica se o trailer do veículo está em jackknife."""
         return abs(beta) > self.JACKKNIFE_LIMIT_RAD
+
+    def _compute_navigation_map(self):
+        """
+        Calcula um mapa de distâncias usando BFS (Breadth-First Search) a partir do objetivo.
+        Isso cria um campo potencial que guia o agente contornando obstáculos (paredes).
+        """
+        map_w, map_h = self.simulation.map.get_size()
+        self.map_width = int(math.ceil(map_w / self.GRID_RESOLUTION))
+        self.map_height = int(math.ceil(map_h / self.GRID_RESOLUTION))
+        
+        # Inicializa grid: -1 = não visitado, -2 = obstáculo
+        self.distance_map = np.full((self.map_width, self.map_height), -1.0, dtype=np.float32)
+        
+        # 1. Rasteriza obstáculos (Paredes)
+        for entity in self.simulation.map.get_entities():
+            if entity.type == MapEntity.ENTITY_WALL:
+                self._rasterize_entity(entity, -2.0)
+
+        # 2. Inicializa BFS a partir do objetivo
+        queue = deque()
+        goal = self.simulation.map.get_parking_goal()
+        
+        # Marca células do objetivo com distância 0 e adiciona à fila
+        self._rasterize_entity(goal, 0.0, queue)
+        
+        # 3. Executa BFS (8 vizinhos para melhor aproximação)
+        neighbors = [
+            (0, 1, 1.0), (0, -1, 1.0), (1, 0, 1.0), (-1, 0, 1.0), 
+            (1, 1, 1.414), (1, -1, 1.414), (-1, 1, 1.414), (-1, -1, 1.414)
+        ]
+        
+        while queue:
+            cx, cy = queue.popleft()
+            current_dist = self.distance_map[cx, cy]
+            
+            for dx, dy, cost in neighbors:
+                nx, ny = cx + dx, cy + dy
+                
+                if 0 <= nx < self.map_width and 0 <= ny < self.map_height:
+                    if self.distance_map[nx, ny] == -1.0: # Não visitado e livre
+                        new_dist = current_dist + cost * self.GRID_RESOLUTION
+                        self.distance_map[nx, ny] = new_dist
+                        queue.append((nx, ny))
+
+    def _rasterize_entity(self, entity, value, queue=None):
+        """Marca as células do grid ocupadas por uma entidade."""
+        bbox = entity.get_bounding_box()
+        corners = bbox.get_corners()
+        xs = [c[0] for c in corners]
+        ys = [c[1] for c in corners]
+        
+        # Limites no grid
+        min_x = max(0, int(min(xs) / self.GRID_RESOLUTION))
+        max_x = min(self.map_width - 1, int(max(xs) / self.GRID_RESOLUTION))
+        min_y = max(0, int(min(ys) / self.GRID_RESOLUTION))
+        max_y = min(self.map_height - 1, int(max(ys) / self.GRID_RESOLUTION))
+        
+        for i in range(min_x, max_x + 1):
+            for j in range(min_y, max_y + 1):
+                # Verifica colisão com o centro da célula
+                cx = (i + 0.5) * self.GRID_RESOLUTION
+                cy = (j + 0.5) * self.GRID_RESOLUTION
+                if bbox.contains_point((cx, cy)):
+                    # Se for obstáculo (-2) ou se estamos inicializando o objetivo (e não é parede)
+                    if value == -2.0 or self.distance_map[i, j] != -2.0:
+                        self.distance_map[i, j] = value
+                        if queue is not None:
+                            queue.append((i, j))
+
+    def _get_geodesic_distance(self, position: tuple[float, float]) -> float:
+        """Retorna a distância de navegação da posição até o objetivo."""
+        x, y = position
+        ix = int(x / self.GRID_RESOLUTION)
+        iy = int(y / self.GRID_RESOLUTION)
+        
+        if 0 <= ix < self.map_width and 0 <= iy < self.map_height:
+             dist = self.distance_map[ix, iy]
+             if dist >= 0:
+                 return dist
+        
+        # Fallback para distância Euclidiana se fora do mapa ou dentro de obstáculo
+        return self._calculate_distance_euclidean(position, self.simulation.map.get_parking_goal_position())

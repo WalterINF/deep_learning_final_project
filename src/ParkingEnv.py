@@ -25,16 +25,15 @@ class ParkingEnv(gym.Env):
     VEHICLE_PARKED_THRESHOLD_M = 3.0 # distancia minima entre centro do trailer e centro da vaga para considerar o veículo estacionado
 
 
-    ## recompensas - TUNED FOR BETTER CONVERGENCE
-    REWARD_GOAL = 50.0 # recompensa por chegar ao objetivo 
-    REWARD_ALIGNMENT = 150.0 # recompensa adicional por alinhar o veículo na vaga corretamente
+    ## recompensas
+    REWARD_GOAL = 100.0 # recompensa por chegar ao objetivo 
+    REWARD_ALIGNMENT = 100.0 # recompensa adicional por alinhar o veículo na vaga corretamente
     REWARD_PROGRESS = 1.0 # recompensa por metro de progresso 
     REWARD_HEADING = 0.0 # recompensa por apontar em direção ao objetivo (desabilitar por enquanto)
     MAX_PUNISHMENT_TIME_PER_EPISODE = -10.0 # penalidade maxima por tempo 
     PUNISHMENT_TIME = MAX_PUNISHMENT_TIME_PER_EPISODE / MAX_STEPS # penalidade por tempo a cada passo
     PUNISHMENT_ZERO_SPEED = -0.1 # penalidade por velocidade zero 
-    PUNISHMENT_COLLISION = -100.0 # penalidade por colisão com paredes
-    PUNISHMENT_OVERLAP = 0.0 * PUNISHMENT_TIME # penalidade por invadir uma vaga a cada passo
+    PUNISHMENT_COLLISION = -100.0 # penalidade por colisão com paredes ou outras vagas de estacionamento
     PUNISHMENT_JACKKNIFE = -100.0 # penalidade por jackknife
 
 
@@ -52,12 +51,9 @@ class ParkingEnv(gym.Env):
         self.steps = 0
         self.total_reward = 0.0
     
-
         self.initial_distance_to_goal = self._get_geodesic_distance(self.simulation.vehicle.get_trailer_position())
         self.last_distance_to_goal = self.initial_distance_to_goal
 
-        
-        # IMPROVED Observation Space:
         # [velocity,         # velocidade atual normalizada [-1, 1] 
         #  theta,            # ângulo de orientação do veículo (trator)
         #  beta,             # ângulo de articulação do trator-trailer
@@ -120,9 +116,8 @@ class ParkingEnv(gym.Env):
         self.steps = 0
         self.total_reward = 0.0
     
-
-        self.initial_distance_to_goal = self._calculate_distance_euclidean(self.simulation.vehicle.get_trailer_position(), self.simulation.map.get_parking_goal_position())
-        self.last_distance_to_goal = self._calculate_distance_euclidean(self.simulation.vehicle.get_trailer_position(), self.simulation.map.get_parking_goal_position())
+        self.initial_distance_to_goal = self._get_geodesic_distance(self.simulation.vehicle.get_trailer_position())
+        self.last_distance_to_goal = self.initial_distance_to_goal
 
         # Build observação
         observation = self._build_observation()
@@ -187,13 +182,13 @@ class ParkingEnv(gym.Env):
         
         new_distance_to_goal = self._get_geodesic_distance(trailer_pos)
         
-
         # verificação de terminação
         if self.steps >= self.MAX_STEPS:
             truncated = True
         elif self._check_vehicle_parking():
             terminated = True
             reward = self._calculate_parking_reward(trailer_theta, goal_theta)
+            info["is_success"] = True
         elif self._check_trailer_jackknife(self.simulation.vehicle.get_beta()):
             terminated = True
             reward = self.PUNISHMENT_JACKKNIFE
@@ -202,8 +197,6 @@ class ParkingEnv(gym.Env):
             if collided:
                 terminated = True
                 reward = self.PUNISHMENT_COLLISION
-            elif self._check_vehicle_overlap():
-                reward += self.PUNISHMENT_OVERLAP
  
         # recompensa por progresso (redução de distância)
         reward += (self.last_distance_to_goal - new_distance_to_goal) * self.REWARD_PROGRESS
@@ -212,10 +205,19 @@ class ParkingEnv(gym.Env):
         observation = self._build_observation()
         self.total_reward += reward
 
+        if terminated or truncated:
+            if "is_success" not in info:
+                info["is_success"] = False
+
         return observation, reward, terminated, truncated, info
 
     def render(self):
-        rgb_array = Visualization.to_rgb_array(self.simulation, img_size=(320, 320))
+        rgb_array = Visualization.to_rgb_array(
+            self.simulation,
+            img_size=(320, 320),
+            distance_map=self.distance_map,
+            grid_resolution=self.GRID_RESOLUTION
+        )
         return rgb_array
 
     def close(self):
@@ -224,19 +226,11 @@ class ParkingEnv(gym.Env):
     def _check_vehicle_collision(self) -> bool:
         """Verifica se o veículo colidiu com alguma parede"""
         for entity in self.simulation.map.get_entities():
-            if entity.type == MapEntity.ENTITY_WALL:
+            if entity.is_collidable():
                 if self.simulation.vehicle.check_collision(entity):
                     return True
         return False
                     
-    def _check_vehicle_overlap(self) -> bool:
-        """Verifica se o veículo passou por cima de uma vaga de estacionamento"""
-        for entity in self.simulation.map.get_entities():
-            if entity.type == MapEntity.ENTITY_PARKING_SLOT:
-                if self.simulation.vehicle.check_collision(entity):
-                    return True
-        return False
-
     def _calculate_distance_euclidean(self, position: tuple[float, float], goal_position: tuple[float, float]):
         distance_to_goal = np.sqrt((position[0] - goal_position[0])**2 + (position[1] - goal_position[1])**2)
         return distance_to_goal
@@ -306,9 +300,9 @@ class ParkingEnv(gym.Env):
         # Inicializa grid: -1 = não visitado, -2 = obstáculo
         self.distance_map = np.full((self.map_width, self.map_height), -1.0, dtype=np.float32)
         
-        # 1. Rasteriza obstáculos (Paredes)
+        # 1. Rasteriza obstáculos (entidades colidíveis)
         for entity in self.simulation.map.get_entities():
-            if entity.type == MapEntity.ENTITY_WALL:
+            if entity.is_collidable():
                 self._rasterize_entity(entity, -2.0)
 
         # 2. Inicializa BFS a partir do objetivo

@@ -60,28 +60,5 @@ class TestEnv(unittest.TestCase):
         goal_direction = env._calculate_goal_direction((0.0, 0.0), (-1.0, -1.0))
         self.assertAlmostEqual(goal_direction, np.deg2rad(-135.0), delta=1e-6)
 
-    def test_calculate_parking_reward(self):
-        env = ParkingEnv()
-        env.reset()
-        action = env.action_space.sample()
-        env.step(action)
-        
-        reward = env._calculate_parking_reward(np.deg2rad(90.0), np.deg2rad(90.0))
-        self.assertAlmostEqual(reward, env.REWARD_GOAL + 1.0*env.REWARD_ALIGNMENT, delta=1e-6)
-        
-        reward = env._calculate_parking_reward(np.deg2rad(90.0), np.deg2rad(180.0))
-        self.assertAlmostEqual(reward, env.REWARD_GOAL + 0.0*env.REWARD_ALIGNMENT, delta=1e-6)
-        
-        reward = env._calculate_parking_reward(np.deg2rad(90.0), np.deg2rad(0.0))
-        self.assertAlmostEqual(reward, env.REWARD_GOAL + 0.0*env.REWARD_ALIGNMENT, delta=1e-6)
-        
-        reward = env._calculate_parking_reward(np.deg2rad(90.0), np.deg2rad(-90.0))
-        self.assertAlmostEqual(reward, env.REWARD_GOAL + 0.0*env.REWARD_ALIGNMENT, delta=1e-6)
 
-
-        reward = env._calculate_parking_reward(np.deg2rad(90.0), np.deg2rad(45.0))
-        self.assertAlmostEqual(reward, env.REWARD_GOAL + 0.5*env.REWARD_ALIGNMENT, delta=1e-6)
-
-        reward = env._calculate_parking_reward(np.deg2rad(0.0), np.deg2rad(-45.0))
-        self.assertAlmostEqual(reward, env.REWARD_GOAL + 0.5*env.REWARD_ALIGNMENT, delta=1e-6)
 

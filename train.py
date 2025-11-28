@@ -26,7 +26,7 @@ except ModuleNotFoundError:
 # config do treinamento - paths relative to script location
 LOG_DIR = os.path.join(SCRIPT_DIR, "logs")  # diretório para logs do TensorBoard
 MODEL_SAVE_DIR = os.path.join(SCRIPT_DIR, "models")  # diretório para salvar os modelos
-MODEL_NAME = "SAC_Improved_V5" # nome do modelo para carregar/treinar/salvar (V2 with improved obs/rewards)
+MODEL_NAME = "SAC_Improved_V7" # nome do modelo para carregar/treinar/salvar
 TOTAL_TIMESTEPS = 20_000_000 # total de timesteps para treinar
 SAVE_EVERY = 100_000 # salvar o modelo a cada 100.000 timesteps
 
@@ -38,7 +38,7 @@ def make_env(seed: int = 0):
         return env
     return _init
 
-def make_vector_env(n_envs: int = 8, use_subproc: bool | None = None):
+def make_vector_env(n_envs: int = 6, use_subproc: bool | None = None):
     if use_subproc is None:
         use_subproc = platform.system() != "Windows"
 

@@ -71,14 +71,12 @@ Controle: [v, alpha], onde:
 * alpha: ângulo de esterçamento do trator.
 
 #### Função de recompensa (o que o agente recebe)
-* +150 por compleção do objetivo (estacionar na vaga de destino)
-* +50 por alinhar o trailer na vaga corretamente ao estacionar (baseado na orientação do trailer)
-* +2.0 por metro de progresso em direção ao objetivo
-* +0.3 por apontar em direção ao objetivo durante a fase de aproximação (heading reward)
-* Recompensa densa de alinhamento do trailer ponderada pela proximidade
-* -100 por colisão com paredes ou obstáculos
+* +100 por compleção do objetivo (estacionar na vaga de destino)
+* +100 por alinhar o trailer na vaga corretamente ao estacionar (baseado na orientação do trailer)
+* +1.0 por metro de progresso em direção ao objetivo
+* -100 por colisão com paredes ou outras vagas de estacionamento
 * -100 por jackknife
-* -10 distribuídos ao longo do episódio como penalidade por tempo: (-10/MAX_STEPS) por passo
+* -20 distribuídos ao longo do episódio como penalidade por tempo: (-10/MAX_STEPS) por passo
 * -0.1 por velocidade zero (penalidade por ficar parado)
 * -0.02 por mudança brusca de esterçamento (smoothness penalty)
 
@@ -97,7 +95,7 @@ angulo de canivete: 65 graus.
 limite de visão do sensor de distância: 20 metros.
 tempo limite do episódio: 90 segundos.
 passo de tempo: 0.2 segundos.
-distancia minima para considerar o veículo estacionado: 2 metros.
+distancia minima para considerar o veículo estacionado: 2 metros do centro da vaga de estacionamento.
 
 
 

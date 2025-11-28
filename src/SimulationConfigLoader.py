@@ -94,9 +94,9 @@ class DefaultMapGenerator(MapGenerator):
     MAP_WIDTH = 150.0
     MAP_HEIGHT = 150.0
     WALL_WIDTH = 4.0
-    PARKING_SLOT_WIDTH = 5.0
-    PARKING_SLOT_HEIGHT = 12.0
-    SPAWN_PADDING = 30.0
+    PARKING_SLOT_WIDTH = 7.0
+    PARKING_SLOT_HEIGHT = 14.0
+    SPAWN_PADDING = 25.0
     WALL_PADDING = 3.0
     N_ROWS = 2
 
@@ -148,6 +148,18 @@ class DefaultMapGenerator(MapGenerator):
         chosen_parking_slot = map.get_random_parking_slot()
         chosen_parking_slot.type = MapEntity.ENTITY_START
         map.start_position = chosen_parking_slot
+
+        # adiciona carros aleatoriamente nas vagas (exceto a vaga de destino e a vaga de partida)
+        for parking_slot in map.get_parking_slots():
+            if random.random() < 0.25 and parking_slot.type != MapEntity.ENTITY_PARKING_GOAL and parking_slot.type != MapEntity.ENTITY_START:
+                map.add_entity(
+                    MapEntity(
+                        position_x=parking_slot.position_x, 
+                        position_y=parking_slot.position_y, 
+                        width=self.PARKING_SLOT_WIDTH - 2.5, 
+                        length=self.PARKING_SLOT_HEIGHT - 6.0, 
+                        theta=parking_slot.theta, 
+                        type=MapEntity.ENTITY_WALL))
 
         return map
 
@@ -248,6 +260,7 @@ class ComplexMapGenerator(MapGenerator):
         chosen_parking_slot = map.get_random_parking_slot()
         chosen_parking_slot.type = MapEntity.ENTITY_START
         map.start_position = chosen_parking_slot
+
 
         return map
 

@@ -187,17 +187,13 @@ class MapEntity:
     ENTITY_PARKING_GOAL = 3
     ENTITY_START = 4
 
+    ## define quais entidades são colidíveis
     ENTITY_COLLIDABLE_FLAGS = {
         ENTITY_WALL: True,
         ENTITY_PARKING_SLOT: False,
         ENTITY_PARKING_GOAL: False,
         ENTITY_START: False,
     }
-
-    ## valores mínimo e máximo para os tipos de entidades colidíveis
-    ## isso é usado para inicializar o observation_space
-    MIN_COLLIDABLE_ENTITY_TYPE = min(key for key, value in ENTITY_COLLIDABLE_FLAGS.items() if value is True)
-    MAX_COLLIDABLE_ENTITY_TYPE = max(key for key, value in ENTITY_COLLIDABLE_FLAGS.items() if value is True)
 
     position_x: float 
     position_y: float
@@ -218,6 +214,9 @@ class MapEntity:
         # BoundingBox expects: (dimension_along_theta, dimension_perpendicular_to_theta)
         # MapEntity: length is along theta, width is perpendicular to theta
         return BoundingBox(self.position_x, self.position_y, self.length, self.width, self.theta)
+
+    def is_collidable(self) -> bool:
+        return self.ENTITY_COLLIDABLE_FLAGS[self.type]
 
     def to_value(self) -> int:
         return self.type
@@ -643,7 +642,6 @@ class Map:
         """Retorna o tamanho do mapa"""
         return (self.size_x, self.size_y)
 
-
     def get_start_position(self) -> MapEntity:
         """Retorna a posição de partida do mapa"""
         if self.start_position is None:
@@ -671,12 +669,12 @@ class Map:
 
 
 
-def fire_raycast(origin_x: float, origin_y: float, theta: float, range: float, entities: list[MapEntity]) -> tuple[float, int]:
+def fire_raycast(origin_x: float, origin_y: float, theta: float, range: float, entities: list[MapEntity]) -> 'RaycastResult':
 
     min_collision_distance = range
     min_collision_entity = None
     for entity in entities:
-        if entity.type == MapEntity.ENTITY_WALL: #or entity.type == MapEntity.ENTITY_PARKING_SLOT:
+        if entity.is_collidable():
             collision_distance = check_raycast_collision(origin_x, origin_y, theta, range, entity.get_bounding_box())
             if collision_distance is not None:
                 if collision_distance < min_collision_distance:

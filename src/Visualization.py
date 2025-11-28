@@ -22,31 +22,11 @@ color_mappings = {
 
 font = Font(None, 20)
 
-def _draw_arrow(surface: pygame.Surface, position: tuple[int, int], angle: float, length: float, width: float, color: tuple[int, int, int]) -> None:
-    # Draw main arrow shaft
-    arrow_x = int(position[0] + length * math.cos(angle))
-    arrow_y = int(position[1] + length * math.sin(angle))
-    pygame.draw.line(surface, color, position, (arrow_x, arrow_y), 2)
-    
-    # Calculate arrowhead points perpendicular to arrow direction
-    # Arrowhead angle (typically 30-45 degrees back from tip)
-    arrowhead_angle = math.pi / 6  # 30 degrees
-    arrowhead_length = width * 2
-    
-    # Left arrowhead line
-    left_x = int(arrow_x - arrowhead_length * math.cos(angle - arrowhead_angle))
-    left_y = int(arrow_y - arrowhead_length * math.sin(angle - arrowhead_angle))
-    pygame.draw.line(surface, color, (arrow_x, arrow_y), (left_x, left_y), 2)
-    
-    # Right arrowhead line
-    right_x = int(arrow_x - arrowhead_length * math.cos(angle + arrowhead_angle))
-    right_y = int(arrow_y - arrowhead_length * math.sin(angle + arrowhead_angle))
-    pygame.draw.line(surface, color, (arrow_x, arrow_y), (right_x, right_y), 2)
-
-
 def to_rgb_array(
     simulation: Simulation,
     img_size: tuple[int, int] = (288, 288),
+    distance_map: np.ndarray | None = None,
+    grid_resolution: float = 1.0,
 ) -> list[list[list[int]]]:
     """Gera uma imagem RGB do mapa e suas entidades.
 
@@ -77,14 +57,35 @@ def to_rgb_array(
     # Fundo cinza 
     surface.fill((128, 128, 128))
 
-    ##add a grid
-    for x in range(0, int(map_width * scale_x), 10):
-        pygame.draw.line(surface, (100, 100, 100), (x, 0), (x, int(map_height * scale_y)), width=1)
-    for y in range(0, int(map_height * scale_y), 10):
-        pygame.draw.line(surface, (100, 100, 100), (0, y), (int(map_width * scale_x), y), width=1)
+    # Draw cost map if provided
+    if distance_map is not None:
+        # Find min and max valid costs (excluding -1 and -2 which are unvisited/obstacles)
+        valid_mask = distance_map >= 0
+        if valid_mask.any():
+            min_cost = float(distance_map[valid_mask].min())
+            max_cost = float(distance_map[valid_mask].max())
+            cost_range = max_cost - min_cost if max_cost > min_cost else 1.0
+            
+            grid_w, grid_h = distance_map.shape
+            circle_radius = 1
+            
+            for i in range(grid_w):
+                for j in range(grid_h):
+                    cost = distance_map[i, j]
+                    if cost >= 0:
+                        normalized = (cost - min_cost) / cost_range
+                        # Interpolate from green (lowest cost) to red (highest cost)
+                        r = int(255 * normalized)
+                        g = int(255 * (1 - normalized))
+                        b = 0
+                        
+                        # Calculate center position of the cell in pixel coordinates
+                        cx = (i + 0.5) * grid_resolution * scale_x
+                        cy = (j + 0.5) * grid_resolution * scale_y
+                        
+                        # Draw small circle
+                        gfxdraw.filled_circle(surface, int(cx), int(cy), circle_radius, (r, g, b))
 
-    # Borda vermelha do mapa
-    pygame.draw.rect(surface, (255, 0, 0), pygame.Rect(0, 0, width, height), width=1)
 
     # Desenha cada entidade como o contorno do seu retângulo (bounding box)
 

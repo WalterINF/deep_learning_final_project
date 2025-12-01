@@ -67,7 +67,7 @@ def to_rgb_array(
             cost_range = max_cost - min_cost if max_cost > min_cost else 1.0
             
             grid_w, grid_h = distance_map.shape
-            circle_radius = 1
+            circle_radius = 4
             
             for i in range(grid_w):
                 for j in range(grid_h):

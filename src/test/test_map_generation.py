@@ -12,7 +12,7 @@ class TestMapGeneration(unittest.TestCase):
         simulation_1 = simulation_loader.load_simulation()
         rgb_array_1 = to_rgb_array(simulation_1, img_size=(2000, 2000))
         env1 = ParkingEnv()
-        rgb_array_2 = env1.render()
+        rgb_array_2 = to_rgb_array(env1.simulation, img_size=(2000, 2000), distance_map=env1.distance_map)
         #subplots
         plt.figure(figsize=(12, 4))
         plt.subplot(1, 3, 1)

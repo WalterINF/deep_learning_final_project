@@ -26,9 +26,10 @@ except ModuleNotFoundError:
 # config do treinamento - paths relative to script location
 LOG_DIR = os.path.join(SCRIPT_DIR, "logs")  # diretório para logs do TensorBoard
 MODEL_SAVE_DIR = os.path.join(SCRIPT_DIR, "models")  # diretório para salvar os modelos
-MODEL_NAME = "SAC_Improved_V7" # nome do modelo para carregar/treinar/salvar
+MODEL_NAME = "SAC_Improved_V9" # nome do modelo para carregar/treinar/salvar
 TOTAL_TIMESTEPS = 20_000_000 # total de timesteps para treinar
 SAVE_EVERY = 100_000 # salvar o modelo a cada 100.000 timesteps
+N_ENVS = 8  # número de ambientes para treinar em paralelo
 
 def make_env(seed: int = 0):
     def _init():
@@ -38,7 +39,7 @@ def make_env(seed: int = 0):
         return env
     return _init
 
-def make_vector_env(n_envs: int = 6, use_subproc: bool | None = None):
+def make_vector_env(n_envs: int = 8, use_subproc: bool | None = None):
     if use_subproc is None:
         use_subproc = platform.system() != "Windows"
 
@@ -52,15 +53,15 @@ def make_vector_env(n_envs: int = 6, use_subproc: bool | None = None):
 
     return DummyVecEnv(env_fns)
 
-def train_sac(model: SAC | None = None, total_timesteps: int = 10000, save_every: int | None = None, save_path: str | None = None, save_name: str | None = None):
-    env = make_vector_env()
+def train_sac(model_path: str | None = None, total_timesteps: int = 10000, save_every: int | None = None, save_path: str | None = None, save_name: str | None = None, n_envs: int = 8):
+    env = make_vector_env(n_envs=n_envs)
 
     policy_kwargs = dict(
         activation_fn=torch.nn.ReLU,
         net_arch=dict(pi=[512, 256, 256], qf=[512, 256, 256])
     )
 
-    if model is None:
+    if model_path is None or not os.path.exists(model_path):
         model = SAC(
             policy="MlpPolicy",
             env=env,
@@ -82,12 +83,14 @@ def train_sac(model: SAC | None = None, total_timesteps: int = 10000, save_every
             sde_sample_freq=4,            
         )
     else:
-        model.set_env(env)
+        print(f"Carregando modelo existente de {model_path}")
+        model = SAC.load(model_path, env=env)
 
     timesteps_split = 0
     if save_every is not None:
         timesteps_split = int(total_timesteps / save_every)
         for i in range(timesteps_split):
+            print(f"Treinando... {i+1} de {timesteps_split} timesteps")
             model.learn(total_timesteps=save_every, progress_bar=True, tb_log_name=save_name, reset_num_timesteps=False)
             
             if save_path and save_name:
@@ -103,12 +106,22 @@ if __name__ == "__main__":
 
     print(f"Começando treinamento com modelo {MODEL_NAME}...")
     
-    # carrega modelo existente se disponível
     model_path = os.path.join(MODEL_SAVE_DIR, MODEL_NAME + ".zip")
-    model = None
-    if os.path.exists(model_path):
-        print(f"Carregando modelo existente de {model_path}")
-        model = SAC.load(model_path)
+
+    print(f"""Treinando:
+        - modelo: {MODEL_NAME}
+        - total de timesteps: {TOTAL_TIMESTEPS}
+        - salvar a cada: {SAVE_EVERY} timesteps
+        - número de ambientes: {N_ENVS}
+        - diretório de logs: {LOG_DIR}
+        - diretório de modelos: {MODEL_SAVE_DIR}
+    """)
     
-    train_sac(model, total_timesteps=TOTAL_TIMESTEPS, save_every=SAVE_EVERY, save_path=MODEL_SAVE_DIR, save_name=MODEL_NAME)
+    train_sac(
+        model_path=model_path, 
+        total_timesteps=TOTAL_TIMESTEPS, 
+        save_every=SAVE_EVERY, 
+        save_path=MODEL_SAVE_DIR, 
+        save_name=MODEL_NAME,
+        n_envs=N_ENVS)
 

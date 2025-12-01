@@ -28,7 +28,7 @@ class ParkingEnv(gym.Env):
     ## recompensas
     REWARD_GOAL = 100.0 # recompensa por chegar ao objetivo 
     REWARD_ALIGNMENT = 100.0 # recompensa adicional por alinhar o veículo na vaga corretamente
-    REWARD_PROGRESS = 1.0 # recompensa por metro de progresso 
+    REWARD_PROGRESS = 2.0 # recompensa por metro de progresso 
     REWARD_HEADING = 0.0 # recompensa por apontar em direção ao objetivo (desabilitar por enquanto)
     MAX_PUNISHMENT_TIME_PER_EPISODE = -10.0 # penalidade maxima por tempo 
     PUNISHMENT_TIME = MAX_PUNISHMENT_TIME_PER_EPISODE / MAX_STEPS # penalidade por tempo a cada passo

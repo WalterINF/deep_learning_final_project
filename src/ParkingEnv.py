@@ -36,7 +36,10 @@ class ParkingEnv(gym.Env):
     PUNISHMENT_COLLISION = -100.0 # penalidade por colisão com paredes ou outras vagas de estacionamento
     PUNISHMENT_JACKKNIFE = -100.0 # penalidade por jackknife
 
-    def __init__(self, seed = 0):
+    ## heuristicas
+    HEURSITICAS_DISPONIVEIS = {"nao_holonomica", "euclidiana", "nenhuma", "manhattan"}
+
+    def __init__(self, seed = 0, heuristica = "nao_holonomica"):
 
         self.render_mode = "rgb_array"
 
@@ -68,10 +71,10 @@ class ParkingEnv(gym.Env):
         
         obs_low = np.array(
             [
-                -1.0,         # z1: componente x rotacionada
-                -1.0,                           # z2: diferença de ângulo theta1
-                -1.0,          # z3: componente y rotacionada
-                -1.0,  # z4: z3 - L*sin(...)
+                -150.0,         
+                -self.STEERING_LIMIT_RAD,                         
+                -math.pi,          
+                -500.0,  
             ]
             + [0.0] * self.simulation.vehicle.get_raycast_count(),
             dtype=np.float32,
@@ -79,10 +82,10 @@ class ParkingEnv(gym.Env):
 
         obs_high = np.array(
             [
-                1.0,           # z1
-                1.0,                           # z2
-                1.0,          # z3
-                1.0,  # z4
+                150.0,         
+                self.STEERING_LIMIT_RAD,       
+                math.pi,         
+                500.0,  
             ]
             + [0.0] * self.simulation.vehicle.get_raycast_count(),
             dtype=np.float32,

@@ -54,36 +54,36 @@ class ParkingEnv(gym.Env):
         self.initial_distance_to_goal = self._get_geodesic_distance(self.simulation.vehicle.get_trailer_position())
         self.last_distance_to_goal = self.initial_distance_to_goal
 
-        # [velocity,         # velocidade atual normalizada [-1, 1] 
-        #  theta,            # ângulo de orientação do veículo (trator)
-        #  beta,             # ângulo de articulação do trator-trailer
-        #  alpha,            # ângulo de esterçamento do trator
-        #  r1..r14,          # distâncias dos raycasts do veículo (normalized 0-1)
-        #  goal_proximity,   # proximidade do veículo ao objetivo (1 no objetivo, 0 longe)
-        #  goal_direction_relative,  # ângulo RELATIVO ao heading do veículo 
-        #  tractor_angle_diff,       # diferença entre orientação do trator e da vaga
-        #  trailer_angle_diff]       # diferença entre orientação do TRAILER e da vaga 
+        # o estado  bruto é x = [x1, y1, θ1, θ2]
+        # L é o comprimento da barra de reboque
+        # z(x) = [
+        # (x_1-x_g)*cos(theta_1g) + (y_1-y_g)*sin(theta_1g),
+        # (theta_1 - theta_1g),
+        # −(x_1 − x_g ) sin theta_1g + (y_1 − y_g ) cos theta_1g
+        # z3 − L · sin(z2 − (theta_2 − theta_2g ))]
+        # z = [z1, z2, z3, z4] 
+        # Espaço de observação k = [z/z_normalizado], onde k é o vetor de erro normalizado
+        # + O_local: percepção local dos obstáculos - 14 sensores raycast posicionados ao redor do veículo
+        
         obs_low = np.array(
             [
-                -1.0,                             # velocity 
-                -np.pi,                           # theta 
-                -self.JACKKNIFE_LIMIT_RAD,        # beta
-                -self.STEERING_LIMIT_RAD,         # alpha
+                -1.0,         # z1: componente x rotacionada
+                -1.0,                           # z2: diferença de ângulo theta1
+                -1.0,          # z3: componente y rotacionada
+                -1.0,  # z4: z3 - L*sin(...)
             ]
-            + [0.0] * self.simulation.vehicle.get_raycast_count()  # raycast lengths 
-            + [0.0, -np.pi, -np.pi, -np.pi],  # goal proximity, relative goal direction, tractor angle diff, trailer angle diff
+            + [0.0] * self.simulation.vehicle.get_raycast_count(),
             dtype=np.float32,
         )
 
         obs_high = np.array(
             [
-                1.0,                              # velocity 
-                np.pi,                            # theta 
-                self.JACKKNIFE_LIMIT_RAD,         # beta
-                self.STEERING_LIMIT_RAD,          # alpha
+                1.0,           # z1
+                1.0,                           # z2
+                1.0,          # z3
+                1.0,  # z4
             ]
-            + [1.0] * self.simulation.vehicle.get_raycast_count()          
-            + [1.0, np.pi, np.pi, np.pi],  # goal proximity, relative goal direction, tractor angle diff, trailer angle diff
+            + [0.0] * self.simulation.vehicle.get_raycast_count(),
             dtype=np.float32,
         )
 
@@ -125,37 +125,26 @@ class ParkingEnv(gym.Env):
         return observation, info
 
     def _build_observation(self) -> np.ndarray:
-        velocity = self.simulation.vehicle.get_velocity()
-        theta = self.simulation.vehicle.get_theta()  # tractor heading
-        beta = self.simulation.vehicle.get_beta()
-        alpha_current = self.simulation.vehicle.get_alpha()
-        trailer_theta = self.simulation.vehicle.get_trailer_theta()
-        
-        velocity_normalized = velocity / self.SPEED_LIMIT_MS
-        
-        raw_lengths, object_classes = self.simulation.vehicle.get_raycast_lengths_and_object_classes()
+        x1 = self.simulation.vehicle.get_position()[0]
+        y1 = self.simulation.vehicle.get_position()[1]
+        xg = self.simulation.map.get_parking_goal_position()[0]
+        yg = self.simulation.map.get_parking_goal_position()[1]
+        theta1 = self.simulation.vehicle.get_theta()
+        theta1g = self.simulation.map.get_parking_goal_theta()
+        theta2 = self.simulation.vehicle.get_trailer_theta()
+        theta2g = self.simulation.map.get_parking_goal_theta()
+        L = self.simulation.vehicle.get_comprimento_trailer()
+
+        z_vector = self._compute_z_vector(
+            x1, y1, xg, yg, theta1, theta1g, theta2, theta2g, L
+        )
+
+        k_vector = self._normalize_z_vector(z_vector)
+
+        raw_lengths, _ = self.simulation.vehicle.get_raycast_lengths_and_object_classes()
         normalized_lengths = [length / self.SENSOR_RANGE_M for length in raw_lengths]
 
-        trailer_pos = self.simulation.vehicle.get_trailer_position()
-        goal_pos = self.simulation.map.get_parking_goal_position()
-        goal_theta = self.simulation.map.get_parking_goal_theta()
-        
-        goal_proximity = self._calculate_goal_proximity(trailer_pos, goal_pos)
-        
-        goal_direction_absolute = self._calculate_goal_direction(trailer_pos, goal_pos)
-        goal_direction_relative = self._normalize_angle(goal_direction_absolute - theta)
-        
-        tractor_angle_diff = self._calculate_angle_diff(theta, goal_theta)
-        
-        trailer_angle_diff = self._calculate_angle_diff(trailer_theta, goal_theta)
-
-        observation = np.array(
-            [velocity_normalized, theta, beta, alpha_current]
-            + normalized_lengths
-            + [goal_proximity, goal_direction_relative, tractor_angle_diff, trailer_angle_diff],
-            dtype=np.float32,
-        )
-        return observation
+        return np.concatenate((k_vector, normalized_lengths))
     
     def _normalize_angle(self, angle: float) -> float:
         """Normaliza um ângulo para o intervalo [-pi, pi]"""
@@ -216,7 +205,8 @@ class ParkingEnv(gym.Env):
             self.simulation,
             img_size=(320, 320),
             distance_map=None,
-            grid_resolution=self.GRID_RESOLUTION
+            grid_resolution=self.GRID_RESOLUTION,
+            observation=self._build_observation()
         )
         return rgb_array
 
@@ -369,3 +359,44 @@ class ParkingEnv(gym.Env):
         
         # Fallback para distância Euclidiana se fora do mapa ou dentro de obstáculo
         return self._calculate_distance_euclidean(position, self.simulation.map.get_parking_goal_position())
+
+    
+    # o estado  bruto é x = [x1, y1, θ1, θ2]
+    # L é o comprimento da barra de reboque
+    # z(x) = [
+    # (x_1-x_g)*cos(theta_1g) + (y_1-y_g)*sin(theta_1g),
+    # (theta_1 - theta_1g),
+    # −(x_1 − x_g ) sin theta_1g + (y_1 − y_g ) cos theta_1g
+    # z3 − L · sin(z2 − (theta_2 − theta_2g ))]
+    def _compute_z1(self, x1: float, y1: float, xg: float, yg: float, theta1g: float) -> float:
+        return (x1 - xg) * math.cos(theta1g) + (y1 - yg) * math.sin(theta1g)
+
+    def _compute_z2(self, theta1: float, theta1g: float) -> float:
+        return theta1 - theta1g
+
+    def _compute_z3(self, x1: float, y1: float, xg: float, yg: float, theta1g: float) -> float:
+        return -(x1 - xg) * math.sin(theta1g) + (y1 - yg) * math.cos(theta1g)
+
+    def _compute_z4(self, z2, z3, L, theta2, theta2g):
+        return z3 - L * math.sin(z2 - (theta2 - theta2g))
+
+    def _compute_z_vector(
+        self, 
+        x1: float, # posição do trator x
+        y1: float, # posição do trator y
+        xg: float, #posiçaõ do alvo
+        yg: float, #posição do alvo
+        theta1: float, # ângulo de orientação do trator
+        theta1g: float, # ângulo de orientação do alvo
+        theta2: float, # ângulo de orientação do trailer
+        theta2g: float, # ângulo de orientação do alvo
+        L: float) -> np.ndarray:
+
+        z1 = self._compute_z1(x1, y1, xg, yg, theta1g)
+        z2 = self._compute_z2(theta1, theta1g)
+        z3 = self._compute_z3(x1, y1, xg, yg, theta1g)
+        z4 = self._compute_z4(z2, z3, L, theta2, theta2g)
+        return np.array([z1, z2, z3, z4])
+
+    def _normalize_z_vector(self, z_vector: np.ndarray) -> np.ndarray:
+        return z_vector / np.linalg.norm(z_vector)

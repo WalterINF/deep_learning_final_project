@@ -27,6 +27,7 @@ def to_rgb_array(
     img_size: tuple[int, int] = (288, 288),
     distance_map: np.ndarray | None = None,
     grid_resolution: float = 1.0,
+    observation: tuple[float, float, float, float] | None = None,
 ) -> list[list[list[int]]]:
     """Gera uma imagem RGB do mapa e suas entidades.
 
@@ -197,6 +198,28 @@ def to_rgb_array(
             alpha_text = f"Alpha: {simulation.vehicle.get_alpha():.2f}"
             alpha_surface = font.render(alpha_text, True, (0, 0, 0))
             surface.blit(alpha_surface, (10, 30))
+
+        if observation is not None:
+            z1_text = f"z1: {observation[0]:.2f}"
+            z1_surface = font.render(z1_text, True, (0, 0, 0))
+            surface.blit(z1_surface, (10, 50))
+            z2_text = f"z2: {observation[1]:.2f}"
+            z2_surface = font.render(z2_text, True, (0, 0, 0))
+            surface.blit(z2_surface, (10, 70))
+            z3_text = f"z3: {observation[2]:.2f}"
+            z3_surface = font.render(z3_text, True, (0, 0, 0))
+            surface.blit(z3_surface, (10, 90))
+            z4_text = f"z4: {observation[3]:.2f}"
+            z4_surface = font.render(z4_text, True, (0, 0, 0))
+            surface.blit(z4_surface, (10, 110))
+
+        if observation is not None:
+            for i in range(4, 4 + len(observation) - 4):
+                raycast_text = f"Raycast {i - 4}: {observation[i]:.2f}"
+                raycast_surface = font.render(raycast_text, True, (0, 0, 0))
+                surface.blit(raycast_surface, (10, 175 + i*15 - 4 * 20))
+
+
 
         #desenha distancia do objetivo
         trailer_position = simulation.vehicle.get_trailer_position()

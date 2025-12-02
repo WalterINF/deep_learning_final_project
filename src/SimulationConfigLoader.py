@@ -112,31 +112,40 @@ class DefaultMapGenerator(MapGenerator):
         map.add_entity(MapEntity(position_x=self.MAP_WIDTH/2, position_y=self.MAP_HEIGHT, width=self.WALL_WIDTH, length=self.MAP_WIDTH, theta=0.0, type=MapEntity.ENTITY_WALL))
 
         parking_lots_rows_heights = [i * self.MAP_HEIGHT/(self.N_ROWS + 1) for i in range(1, self.N_ROWS + 1)]
-
         parking_lots_end_x = self.MAP_WIDTH - self.SPAWN_PADDING - self.PARKING_SLOT_WIDTH/2
-        for row_height in parking_lots_rows_heights:
-            #adicionar parede horizontal entre as fileira de vagas
-            map.add_entity(MapEntity(position_x=self.MAP_WIDTH/2, position_y=row_height, width=self.MAP_WIDTH - 2*self.SPAWN_PADDING, length=1.0, theta=math.pi/2, type=MapEntity.ENTITY_WALL))
-            parking_lots_start_x = self.SPAWN_PADDING + self.PARKING_SLOT_WIDTH/2
-            #adicionar uma fileira de vagas apontando para baixo e outra apontando para cima
-            while parking_lots_start_x < parking_lots_end_x:
-                upper_parking_slot = MapEntity(
-                    position_x=parking_lots_start_x, 
-                    position_y=row_height - self.PARKING_SLOT_HEIGHT/2.0 - self.WALL_PADDING, 
-                    width=self.PARKING_SLOT_WIDTH, 
-                    length=self.PARKING_SLOT_HEIGHT, 
-                    theta=-math.pi/2, 
-                    type=MapEntity.ENTITY_PARKING_SLOT)
-                map.add_entity(upper_parking_slot)
-                lower_parking_slot = MapEntity(
-                    position_x=parking_lots_start_x, 
-                    position_y=row_height + self.PARKING_SLOT_HEIGHT/2.0 + self.WALL_PADDING, 
-                    width=self.PARKING_SLOT_WIDTH, 
-                    length=self.PARKING_SLOT_HEIGHT, 
-                    theta=math.pi/2, 
-                    type=MapEntity.ENTITY_PARKING_SLOT)
-                map.add_entity(lower_parking_slot)
-                parking_lots_start_x += self.PARKING_SLOT_WIDTH
+
+        top_row_height = self.MAP_HEIGHT/3
+        bottom_row_height = 2*self.MAP_HEIGHT/3
+
+        map.add_entity(MapEntity(position_x=self.MAP_WIDTH/2, position_y=top_row_height, width=self.MAP_WIDTH - 2*self.SPAWN_PADDING, length=1.0, theta=math.pi/2, type=MapEntity.ENTITY_WALL))
+        parking_lots_start_x = self.SPAWN_PADDING + self.PARKING_SLOT_WIDTH/2
+        #adicionar uma fileira de vagas apontando para baixo 
+        while parking_lots_start_x < parking_lots_end_x:
+            upper_parking_slot = MapEntity(
+                position_x=parking_lots_start_x, 
+                position_y=top_row_height - self.PARKING_SLOT_HEIGHT/2.0 - self.WALL_PADDING, 
+                width=self.PARKING_SLOT_WIDTH, 
+                length=self.PARKING_SLOT_HEIGHT, 
+                theta=-math.pi/2, 
+                type=MapEntity.ENTITY_PARKING_SLOT)
+            map.add_entity(upper_parking_slot)
+            parking_lots_start_x += self.PARKING_SLOT_WIDTH
+
+        #adicionar uma fileira de vagas apontando para cima
+        map.add_entity(MapEntity(position_x=self.MAP_WIDTH/2, position_y=bottom_row_height, width=self.MAP_WIDTH - 2*self.SPAWN_PADDING, length=1.0, theta=math.pi/2, type=MapEntity.ENTITY_WALL))
+        parking_lots_start_x = self.SPAWN_PADDING + self.PARKING_SLOT_WIDTH/2
+        while parking_lots_start_x < parking_lots_end_x:
+            lower_parking_slot = MapEntity(
+                position_x=parking_lots_start_x, 
+                position_y=bottom_row_height + self.PARKING_SLOT_HEIGHT/2.0 + self.WALL_PADDING, 
+                width=self.PARKING_SLOT_WIDTH, 
+                length=self.PARKING_SLOT_HEIGHT, 
+                theta=math.pi/2, 
+                type=MapEntity.ENTITY_PARKING_SLOT)
+            map.add_entity(lower_parking_slot)
+            parking_lots_start_x += self.PARKING_SLOT_WIDTH
+
+
 
 
 

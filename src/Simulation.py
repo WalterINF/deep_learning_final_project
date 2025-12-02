@@ -407,8 +407,25 @@ class ArticulatedVehicle():
     def get_largura_trator(self) -> float:
         return self.largura_trator
 
-    def get_rear_axle_position(self) -> tuple[float, float]:
-        pass
+    def get_x1(self) -> float:
+        return self.position_x
+
+    def get_y1(self) -> float:
+        return self.position_y
+
+    def get_theta1(self) -> float:
+        return self.theta
+
+    def get_theta2(self) -> float:
+        return self.get_trailer_theta()
+
+    position_x: float 
+    position_y: float
+    width: float
+    length: float
+    theta: float # ângulo em relação ao eixo x do mapa
+    type: int
+
     
     def get_trailer_rear_axle_position(self) -> tuple[float, float]:
         """

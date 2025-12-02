@@ -26,7 +26,7 @@ except ModuleNotFoundError:
 # config do treinamento - paths relative to script location
 LOG_DIR = os.path.join(SCRIPT_DIR, "logs")  # diretório para logs do TensorBoard
 MODEL_SAVE_DIR = os.path.join(SCRIPT_DIR, "models")  # diretório para salvar os modelos
-MODEL_NAME = "SAC_NoHeuristic" # nome do modelo para carregar/treinar/salvar
+MODEL_NAME = "SAC_Privilieged" # nome do modelo para carregar/treinar/salvar
 TOTAL_TIMESTEPS = 20_000_000 # total de timesteps para treinar
 SAVE_EVERY = 100_000 # salvar o modelo a cada 100.000 timesteps
 N_ENVS = 6  # número de ambientes para treinar em paralelo
@@ -58,7 +58,7 @@ def train_sac(model_path: str | None = None, total_timesteps: int = 10000, save_
 
     policy_kwargs = dict(
         activation_fn=torch.nn.ReLU,
-        net_arch=dict(pi=[512, 256, 256], qf=[512, 256, 256])
+        net_arch=dict(pi=[256, 128, 128], qf=[256, 128, 128])
     )
 
     if model_path is None or not os.path.exists(model_path):

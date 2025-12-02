@@ -28,6 +28,7 @@ def to_rgb_array(
     distance_map: np.ndarray | None = None,
     grid_resolution: float = 1.0,
     observation: tuple[float, float, float, float] | None = None,
+    heuristic_value: float = None,
 ) -> list[list[list[int]]]:
     """Gera uma imagem RGB do mapa e suas entidades.
 
@@ -136,23 +137,11 @@ def to_rgb_array(
     # Desenha o veículo
     if simulation.vehicle is not None:
         # Tractor
-        tractor_bbox = simulation.vehicle.get_bounding_box_tractor()
+        tractor_bbox = simulation.vehicle.get_bounding_box()
         tractor_corners = tractor_bbox.get_corners()
         tractor_scaled = [(x * scale_x, y * scale_y) for (x, y) in tractor_corners]
         gfxdraw.aapolygon(surface, tractor_scaled, (128, 128, 255)) ## azul claro
         gfxdraw.filled_polygon(surface, tractor_scaled, (128, 128, 255)) ## azul claro
-
-        # Trailer
-        trailer_bbox = simulation.vehicle.get_bounding_box_trailer()
-        trailer_corners = trailer_bbox.get_corners()
-        trailer_scaled = [(x * scale_x, y * scale_y) for (x, y) in trailer_corners]
-        gfxdraw.aapolygon(surface, trailer_scaled, (0, 200, 0)) ## verde
-        gfxdraw.filled_polygon(surface, trailer_scaled, (0, 200, 0)) ## verde
-
-        # Quinta roda do trator (círculo)
-        axle_pos = (simulation.vehicle.position_x_trator * scale_x, simulation.vehicle.position_y_trator * scale_y)
-        axle_radius = 0.5 * scale_x
-        gfxdraw.filled_circle(surface, int(axle_pos[0]), int(axle_pos[1]), int(axle_radius), (128, 0, 128)) # roxo
 
         # Desenha os raycasts com círculos nas pontas
 
@@ -219,14 +208,20 @@ def to_rgb_array(
                 raycast_surface = font.render(raycast_text, True, (0, 0, 0))
                 surface.blit(raycast_surface, (10, 175 + i*15 - 4 * 20))
 
+        if heuristic_value is not None:
+            heuristic_text = f"Heuristic {i - 4}: {observation[i]:.2f}"
+            raycast_surface = font.render(heuristic_text, True, (0, 0, 0))
+            surface.blit(raycast_surface, (50, 175 - 4 * 20))
+
+
 
 
         #desenha distancia do objetivo
-        trailer_position = simulation.vehicle.get_trailer_position()
-        trailer_position_scaled = (trailer_position[0] * scale_x, trailer_position[1] * scale_y)
+        vehicle_position = simulation.vehicle.get_position()
+        vehicle_position_scaled = (vehicle_position[0] * scale_x, vehicle_position[1] * scale_y)
         goal_position = simulation.map.get_parking_goal_position()
         goal_position_scaled = (goal_position[0] * scale_x, goal_position[1] * scale_y)
-        gfxdraw.line(surface, int(trailer_position_scaled[0]), int(trailer_position_scaled[1]), int(goal_position_scaled[0]), int(goal_position_scaled[1]), (0, 0, 255)) ## azul
+        gfxdraw.line(surface, int(vehicle_position_scaled[0]), int(vehicle_position_scaled[1]), int(goal_position_scaled[0]), int(goal_position_scaled[1]), (0, 0, 255)) ## azul
         gfxdraw.filled_circle(surface, int(goal_position_scaled[0]), int(goal_position_scaled[1]), int(0.5 * scale_x), (0, 0, 255)) ## azul
 
     # Extrai os pixels como bytes em ordem RGB

@@ -94,7 +94,7 @@ class DefaultMapGenerator(MapGenerator):
     MAP_WIDTH = 150.0
     MAP_HEIGHT = 150.0
     WALL_WIDTH = 4.0
-    PARKING_SLOT_WIDTH = 7.0
+    PARKING_SLOT_WIDTH = 5.5
     PARKING_SLOT_HEIGHT = 14.0
     SPAWN_PADDING = 25.0
     WALL_PADDING = 3.0

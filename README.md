@@ -1,6 +1,10 @@
 # deep_learning_final_project
 Repositório do projeto final de AGL10225 -  Aprendizado Por Reforço
 
+## Resumo
+
+O planejamento de movimento para veículos articulados em ambientes complexos impõe desafios significativos devido a restrições não-holonômicas e à presença de obstáculos. Este trabalho investiga a eficácia do *Heuristic Guided Reinforcement Learning* (HuRL) na aceleração do treinamento de agentes de Aprendizado por Reforço para tarefas de estacionamento. Utilizando o algoritmo *Soft Actor-Critic* (SAC), avaliamos comparativamente três estratégias de *reward shaping*: ausência de heurística (baseline), distância Euclidiana e distância topológica via *Breadth-First Search* (BFS). Os resultados demonstram que a heurística baseada em BFS, ao incorporar a geometria dos obstáculos, supera significativamente as demais abordagens, permitindo a convergência robusta e altas taxas de sucesso, enquanto a heurística Euclidiana estagna em mínimos locais e o baseline falha em aprender a tarefa.
+
 ## objetivo
 
 Este projeto tem por objetivo avaliar diferentes heurísticas aliadas ao HuRL - Heuristic Reinforcement Learning, para treinar um agente para planejamento de rotas de veículos articulados em espaço de estacionamento.
@@ -16,6 +20,18 @@ Nesse contexto, exploramos o potencial do Heuristic Guided Reinforcement Learnin
 
 ## Metodologia
 A metodologia consiste em três pilares: a modelagem do domínio físico, a definição da heurística física para reward shaping e a integração no framework HuRL.
+Modelamos a entidade trator-trailer, seu ambiente físico, interações e dinâmicas em um ambiente da api Gymnasium customizado.
+Instrumentamos o ambiente de aprendizado com duas heurísticas principais, que modelam a recompensa do agente a cada passo de forma distinta:
+Distância euclidiana: Recompensa o agente por reduzir a distância em linha reta até o objetivo
+Distância de menor caminho considerando obstáculos (BFS): Recompensa o agente por seguir o menor caminho válido até o objetivo, reduzindo a menor distância calculada pelo BFS.
+Treinamos agentes de aprendizado por reforço por um número fixo de passos com cada heurística, usando o mesmo algoritmo
+Comparamos o desempenho de treinamento dos agentes entre si e ao baseline, um agente treinado sem heurística.
+
+Para investigar o impacto da qualidade da heurística na eficiência do aprendizado, foram estabelecidos três cenários experimentais distintos:
+Baseline: Agente treinado sem informação heurística auxiliar (recompensas esparsas).
+Heurística Euclidiana: Moldagem de recompensa baseada na redução da distância linear (line-of-sight) ao objetivo.
+Heurística Topológica (BFS): Moldagem de recompensa baseada na redução da distância do menor caminho válido, computada via Breadth-First Search em um mapa de ocupação discretizado.
+
 
 ## HuRL
 
@@ -48,15 +64,9 @@ Para a simulação do movimento do veículo articulado durante a expansão de n�
 
 ### Ambiente físico
 
-#### Mapa
-
 Pares de fileiras de vagas apontando em direções opostas, com paredes entre elas
 
-#### Dimensões
-
 150x150 metros (22500 m^2)
-
-#### Randomização de domínio 
 
 A cada geração, uma vaga aleatória é escolhida como ponto de partida e outra é escolhida como ponto de chegada (alvo)
 Quaisquer outras vagas tem uma chance de 25% de possuir um veículo estacionado sobre elas (obstáculo)
@@ -96,6 +106,12 @@ Quaisquer outras vagas tem uma chance de 25% de possuir um veículo estacionado 
 │   └── Visualization.py: classe para renderização das simulações (e gravação de vídeos)
 └── veiculo_com_os_raycast.png: imagem do veículo com os raycasts
 
+## Modelos treinados
+
+| Modelo | Heurística |
+SAC_Improved_v6: modelo treinado sem heurística
+SAC_Improved_v8: modelo treinado com heurística euclidiana
+SAC_Improved_v9: modelo treinado com heurística BFS
 
 ### Ambiente 
 
@@ -153,12 +169,18 @@ tempo limite do episódio: 90 segundos.
 passo de tempo: 0.2 segundos.
 distancia minima para considerar o veículo estacionado: 2 metros do centro da vaga de estacionamento.
 
-### Heurísticas avaliadas
+### Heurísticas Avaliadas
 
-1. Heurística Euclidiana
-Usamos a distância euclidiana do veículo até a vaga destino para fazer o reward shaping. O agente é recompensado por reduzir essa distância a cada passo.
-2. BFS
-Primeiramente, discretizamos o mapa em pixels de 1m e usamos o BFS (Breadth-first-search) a partir do alvo para computar um mapa de distâncias considerando todos os obstáculos do ambiente. A recompensa do agente é então calculada consultando-se esse mapa a cada passo e computando a diferença entre a distância anterior - também pelo BFS - e a atual.
+Neste estudo, a eficácia do *reward shaping* foi investigada através da comparação de três abordagens distintas para a definição da função de potencial.
+
+1. **Baseline (Sem Heurística)**
+   Nesta configuração de controle, o agente é submetido a um regime de recompensa esparsa, recebendo sinais de reforço exclusivamente nos eventos terminais (sucesso ou falha) e penalidades temporais. Esta abordagem serve como linha de base para avaliar o impacto da introdução de sinais de recompensa densos providos pelas heurísticas.
+
+2. **Heurística Euclidiana**
+   Esta abordagem emprega a distância Euclidiana ($L^2$ norm) entre o centro de massa do veículo e o centróide da vaga de destino como função de potencial. O *reward shaping* é formulado para recompensar o gradiente negativo da distância, incentivando a redução da distância linear a cada passo de tempo. Embora computacionalmente eficiente, esta heurística ignora a topologia do ambiente e restrições cinemáticas, tornando-a suscetível a mínimos locais em ambientes com obstáculos não convexos.
+
+3. **Heurística Topológica (BFS)**
+   Para incorporar a geometria dos obstáculos na função de recompensa, utiliza-se o algoritmo de busca em largura (*Breadth-First Search* - BFS). O ambiente é discretizado em uma grade de ocupação com resolução de $1m \times 1m$. O mapa de distâncias geodésicas (considerando obstáculos estáticos) é computado a partir do ponto alvo. A recompensa densa é derivada da redução da distância do menor caminho válido pelo BFS, guiando o agente através de trajetórias livres de colisão e mitigando o problema de mínimos locais.
 
 
 ### SAC
@@ -180,14 +202,41 @@ tau: 0.005
 
 ### Resultados
 
-Vantagem do BFS para o reward shaping fica evidente. O modelo que usa a heurística euclidiana estabiliza a recompensa perto de 0, indicando que aprendeu a ‘sobreviver’, mas não chegar ao objetivo de fato. Enquanto a heurística BFS premitiu ao agente aprender o caminho correto até a vaga destino.
-Definimos taxa de sucesso como a frequência que o agente atinge o objetivo principal - estacionar na vaga. Novamente, BFS se sobressai com 70% de sucesso após 3.5M de passos
+## Resultados
+
+A avaliação dos modelos baseou-se em duas métricas principais: recompensa média acumulada e taxa de sucesso por episódio.
+
+### Recompensa Média
+A análise das curvas de aprendizado evidencia a superioridade da heurística BFS no *reward shaping*. O modelo **SAC + BFS** apresentou convergência robusta para valores elevados de recompensa. Em contrapartida, o modelo **SAC + Euclidiano** estagnou em patamares inferiores, limitado por mínimos locais. O **Baseline** estabilizou em valores negativos, indicando o aprendizado de uma política de "sobrevivência" (evitar colisões) sem, contudo, solucionar a tarefa de navegação.
+
+### Taxa de Sucesso
+Definida como a conclusão efetiva da manobra de estacionamento, a taxa de sucesso corroborou a eficácia da informação topológica. A heurística **BFS** obteve desempenho significativamente superior, superando a complexidade dos obstáculos. A heurística **Euclidiana** demonstrou eficácia limitada, restringindo-se majoritariamente a cenários onde o vetor de direção ao objetivo não apresentava obstruções físicas.
 
 
 ### Conclusão
 
-A escolha da heurística para o reward shaping é crucial para o sucesso do aprendizado. A heurística BFS, apesar de mais complexa, se mostrou mais eficiente para o problema de estacionamento de veículos articulados.
+O HuRL apresenta um grande potencial de aumentar a eficiência do treinamento de agentes de RL em aplicações de planejamento de rotas. Em nosso caso, o aprendizado efetivo só foi possibilitado pelo uso de uma heurística.
 
+O vantagem trazida  pelo reward shaping depende fortemente da heurística escolhida. Quanto mais a heurística se conforma à dinâmica real do ambiente (obstáculos), maior o ganho de eficiência no treinamento do agente.
+
+O presente estudo demonstrou a eficácia do framework *Heuristic Guided Reinforcement Learning* (HuRL) aplicado ao planejamento de movimento de veículos articulados, um domínio caracterizado por dinâmica não-holonômica e horizontes longos. Os resultados indicam que a aplicação de *reward shaping* baseado em potencial é determinante para superar a esparsidade de recompensas, viabilizando a convergência do algoritmo SAC onde a abordagem *baseline* convergiu apenas para comportamentos de sobrevivência.
+
+A análise comparativa evidenciou que o ganho de desempenho é estritamente correlacionado à fidelidade topológica da informação heurística. Enquanto a heurística Euclidiana sofreu com mínimos locais, a abordagem baseada em BFS mostrou-se superior ao incorporar a geometria dos obstáculos no cálculo do potencial, fornecendo gradientes de recompensa densos e consistentes. Conclui-se, portanto, que a hibridização de métodos de busca clássicos com Aprendizado por Reforço Profundo constitui uma estratégia robusta e necessária para a resolução eficaz de tarefas de navegação complexa.
+
+
+### Trabalhos futuros
+
+Com base nos resultados obtidos e nas limitações identificadas, propõem-se as seguintes direções para a continuidade da pesquisa:
+
+1.  **Incorporação de Restrições Não-Holonômicas na Heurística**: A substituição do BFS (que assume movimento omnidirecional) por algoritmos como *Hybrid A** ou *RRT**, que consideram o raio mínimo de curvatura do veículo, poderia gerar potenciais de recompensa ainda mais informativos, especialmente em manobras de precisão.
+
+2.  **Evolução para Modelagem Dinâmica**: A transição do modelo cinemático para um modelo dinâmico completo, incorporando forças de atrito, inércia, massa e escorregamento dos pneus, aumentaria a fidelidade da simulação e facilitaria a transferência para veículos reais (*Sim-to-Real*).
+
+3.  **Ambientes Dinâmicos e Estocásticos**: Avaliar a robustez do agente em cenários com obstáculos móveis (outros veículos, pedestres) e incertezas sensoriais, aproximando o ambiente de situações de tráfego real.
+
+4.  **Curriculum Learning**: Implementar estratégias de aprendizado curricular, onde a complexidade do ambiente (número de obstáculos, dificuldade da manobra) aumenta progressivamente, visando acelerar a convergência e estabilidade do treinamento.
+
+5.  **Exploração de Outras Arquiteturas de RL**: Investigar o desempenho de outros algoritmos *off-policy* (ex: TD3) ou *on-policy* (ex: PPO), bem como abordagens baseadas em modelo (*Model-Based RL*), sob o paradigma HuRL.
 
 
 

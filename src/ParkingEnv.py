@@ -1,29 +1,29 @@
 import numpy as np
 import gymnasium as gym
+from src import Simulation
 from src.SimulationConfigLoader import SimulationLoader
-from src.Simulation import MapEntity
+from src.Simulation import MapEntity, Vehicle
 import src.Visualization as Visualization
 from typing import Any, SupportsFloat
 import math
 from collections import deque
+from src.heuristics import calcular_distancia_nao_holonomica_carro
 
 
 class ParkingEnv(gym.Env):
 
     metadata = {"render_modes": ["rgb_array"], "render_fps": 24}
 
-
     ## ambiente
     GRID_RESOLUTION = 1.0  # Resolução do grid em metros para o pathfinding
     SENSOR_RANGE_M = 50.0 # raio do sensor
     SPEED_LIMIT_MS = 5.0 # velocidade maxima
     STEERING_LIMIT_RAD = float(np.deg2rad(28.0)) # angulo maximo de esterçamento
-    JACKKNIFE_LIMIT_RAD = float(np.deg2rad(65.0)) # angulo maximo de jackknife
     DT = 0.2 # tempo do passo de simulação
     MAX_SECONDS = 90.0
     MAX_STEPS = int(MAX_SECONDS / DT)
-    VEHICLE_PARKED_THRESHOLD_M = 3.0 # distancia minima entre centro do trailer e centro da vaga para considerar o veículo estacionado
-
+    VEHICLE_PARKED_THRESHOLD_M = 0.3 # distancia minima entre centro do veículo e centro da vaga para considerar o veículo estacionado
+    VEHICLE_PARKED_THRESHOLD_ANGLE = float(np.deg2rad(5.0)) # angulo maximo de desalinhamento para considerar o veículo estacionado
 
     ## recompensas
     REWARD_GOAL = 100.0 # recompensa por chegar ao objetivo 
@@ -36,22 +36,23 @@ class ParkingEnv(gym.Env):
     PUNISHMENT_COLLISION = -100.0 # penalidade por colisão com paredes ou outras vagas de estacionamento
     PUNISHMENT_JACKKNIFE = -100.0 # penalidade por jackknife
 
-
-
     def __init__(self, seed = 0):
 
         self.render_mode = "rgb_array"
+
 
         self.simulation_loader = SimulationLoader()
 
         self.simulation = self.simulation_loader.load_simulation()
 
-        self._compute_navigation_map()
+        self.kinematic_car_params = KinematicCarParams(
+            wheelbase=self.simulation.vehicle.get_wheelbase()
+        )
 
         self.steps = 0
         self.total_reward = 0.0
-    
-        self.initial_distance_to_goal = self._get_geodesic_distance(self.simulation.vehicle.get_trailer_position())
+
+        self.initial_distance_to_goal = self._calculate_holonomic_distance()
         self.last_distance_to_goal = self.initial_distance_to_goal
 
         # o estado  bruto é x = [x1, y1, θ1, θ2]
@@ -87,6 +88,8 @@ class ParkingEnv(gym.Env):
             dtype=np.float32,
         )
 
+
+
         self.observation_space = gym.spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
 
         # Action: [v, alpha]
@@ -111,12 +114,10 @@ class ParkingEnv(gym.Env):
 
         self.simulation = self.simulation_loader.load_simulation()
 
-        self._compute_navigation_map()
-
         self.steps = 0
         self.total_reward = 0.0
-    
-        self.initial_distance_to_goal = self._get_geodesic_distance(self.simulation.vehicle.get_trailer_position())
+        
+        self.initial_distance_to_goal = self._calculate_holonomic_distance()
         self.last_distance_to_goal = self.initial_distance_to_goal
 
         # Build observação
@@ -125,21 +126,20 @@ class ParkingEnv(gym.Env):
         return observation, info
 
     def _build_observation(self) -> np.ndarray:
-        x1 = self.simulation.vehicle.get_position()[0]
-        y1 = self.simulation.vehicle.get_position()[1]
-        xg = self.simulation.map.get_parking_goal_position()[0]
-        yg = self.simulation.map.get_parking_goal_position()[1]
-        theta1 = self.simulation.vehicle.get_theta()
-        theta1g = self.simulation.map.get_parking_goal_theta()
-        theta2 = self.simulation.vehicle.get_trailer_theta()
-        theta2g = self.simulation.map.get_parking_goal_theta()
-        L = self.simulation.vehicle.get_comprimento_trailer()
 
-        z_vector = self._compute_z_vector(
-            x1, y1, xg, yg, theta1, theta1g, theta2, theta2g, L
+        vehicle_state = self.simulation.vehicle.get_state()
+        desired_state = [
+            self.simulation.map.get_parking_goal_position()[0], 
+            self.simulation.map.get_parking_goal_position()[1], 
+            self.simulation.map.get_parking_goal_theta(),
+            0.0] # phi_d = 0
+
+        privileged_coordinates = compute_privileged_coordinates(
+            state=vehicle_state,
+            goal=desired_state,
+            params=self.kinematic_car_params
         )
-
-        k_vector = self._normalize_z_vector(z_vector)
+        k_vector = privileged_coordinates.z
 
         raw_lengths, _ = self.simulation.vehicle.get_raycast_lengths_and_object_classes()
         normalized_lengths = [length / self.SENSOR_RANGE_M for length in raw_lengths]
@@ -160,33 +160,26 @@ class ParkingEnv(gym.Env):
 
         self.simulation.move_vehicle(velocity, alpha, self.DT)
 
-        trailer_pos = self.simulation.vehicle.get_trailer_position()
         goal_pos = self.simulation.map.get_parking_goal_position()
         goal_theta = self.simulation.map.get_parking_goal_theta()
-        tractor_theta = self.simulation.vehicle.get_theta()
-        trailer_theta = self.simulation.vehicle.get_trailer_theta()
 
         if abs(velocity) < 0.1:
             reward += self.PUNISHMENT_ZERO_SPEED
         
-        new_distance_to_goal = self._get_geodesic_distance(trailer_pos)
+        new_distance_to_goal = self._calculate_holonomic_distance()
         
         # verificação de terminação
         if self.steps >= self.MAX_STEPS:
             truncated = True
         elif self._check_vehicle_parking():
             terminated = True
-            reward = self._calculate_parking_reward(trailer_theta, goal_theta)
+            reward = self._calculate_parking_reward(self.simulation.vehicle.get_theta(), goal_theta)
             info["is_success"] = True
-        elif self._check_trailer_jackknife(self.simulation.vehicle.get_beta()):
-            terminated = True
-            reward = self.PUNISHMENT_JACKKNIFE
         else:
             collided = self._check_vehicle_collision()
             if collided:
-                terminated = True
+                terminated = True 
                 reward = self.PUNISHMENT_COLLISION
- 
         # recompensa por progresso (redução de distância) <-- aqui é definida a heurística
         reward += (self.last_distance_to_goal - new_distance_to_goal) * self.REWARD_PROGRESS
         self.last_distance_to_goal = new_distance_to_goal
@@ -206,7 +199,8 @@ class ParkingEnv(gym.Env):
             img_size=(320, 320),
             distance_map=None,
             grid_resolution=self.GRID_RESOLUTION,
-            observation=self._build_observation()
+            observation=self._build_observation(),
+            heuristic_value=self._calculate_holonomic_distance()
         )
         return rgb_array
 
@@ -232,7 +226,6 @@ class ParkingEnv(gym.Env):
         raw_distance = np.sqrt((position[0] - goal_position[0])**2 + (position[1] - goal_position[1])**2)
         return 1.0 / (1.0 + raw_distance)
         
-
     def _calculate_goal_direction(self, position: tuple[float, float], goal_position: tuple[float, float]):
         """Retorna a direção até o objetivo em radianos, normalizada para o intervalo [-pi, pi]"""
         direction_to_goal = np.arctan2(goal_position[1] - position[1], goal_position[0] - position[0])
@@ -248,119 +241,97 @@ class ParkingEnv(gym.Env):
         angle_diff = np.arctan2(np.sin(diff), np.cos(diff))
         return angle_diff
 
-    def _check_vehicle_parking(self) -> bool:
-        """Verifica se o trailer do veículo está dentro de uma vaga de estacionamento."""
-        return self._calculate_distance_euclidean(self.simulation.vehicle.get_trailer_position(), self.simulation.map.get_parking_goal_position()) < self.VEHICLE_PARKED_THRESHOLD_M
+    def _calculate_holonomic_distance(self):
+        position_car_x, position_car_y = self.simulation.vehicle.get_position()
+        car_theta = self.simulation.vehicle.get_theta()
+        position_goal_x, position_goal_y = self.simulation.map.get_parking_goal_position()
+        goal_theta = self.simulation.map.get_parking_goal_theta()
 
-    def _calculate_parking_reward(self, trailer_theta: float, parking_goal_theta: float) -> float:
-            """Calcula a recompensa por estacionar o veículo baseada na orientação do TRAILER.
+        return calcular_distancia_nao_holonomica_carro(
+            estado_atual=[position_car_x,position_car_y,car_theta],
+            estado_alvo=[position_goal_x, position_goal_y, goal_theta],
+            l_carro=self.simulation.vehicle.get_wheelbase()
+        )
+
+    def _check_vehicle_parking(self) -> bool:
+        """Verifica se o veículo está dentro de uma vaga de estacionamento no ângulo correto."""
+        return self._calculate_distance_euclidean(self.simulation.vehicle.get_position(), self.simulation.map.get_parking_goal_position()) < self.VEHICLE_PARKED_THRESHOLD_M and self.menor_diferenca_entre_angulos(self.simulation.vehicle.get_theta(), self.simulation.map.get_parking_goal_theta(), usarDirecao=False) < self.VEHICLE_PARKED_THRESHOLD_ANGLE
+
+    def menor_diferenca_entre_angulos(self, angulo1: float, angulo2: float, usarDirecao: bool = False) -> float:
+        """
+        Calcula o menor ângulo em radianos entre dois ângulos distintos.    
+        """
+        # Normalizao angulo para o intervalo [-pi, pi] caso ele seja maior que pi ou menor que -pi
+        angulo1 = self.normalize_if_needed(angulo1)
+        angulo2 = self.normalize_if_needed(angulo2)
+        
+        # Calcula a diferença entre os ângulos normalizados
+        diff = self.normalize_if_needed(angulo1 - angulo2)
+
+        if usarDirecao:
+            return diff
+        else:
+            return abs(diff)
+
+    def normalize_if_needed(self, angle: float) -> float:
+        """
+        Normaliza um ângulo para o intervalo [-pi, pi] se necessário.
+        
+        Parâmetros:
+            angle (float): O ângulo a ser normalizado.
+
+        Retorna:
+            float: O ângulo normalizado no intervalo [-pi, pi].
+        """
+        if angle > math.pi or angle < -math.pi:
+            angle = self.normalize_angle(angle)
+        
+        return angle
+
+    def normalize_angle(self, angle: float) -> float:
+        """
+        Normaliza um ângulo para o intervalo [-pi, pi].
+        
+        Parâmetros:
+            angle (float): O ângulo a ser normalizado.
+
+        Retorna:
+            float: O ângulo normalizado no intervalo [-pi, pi].
+        """
+        return (angle + math.pi) % (2 * math.pi) - math.pi
+    
+    def soma_angulo_normalizado(self, angulo1: float, angulo2: float) -> float:
+        """
+        Soma dois ângulos e normaliza o resultado para o intervalo [-pi, pi].
+        
+        Parâmetros:
+            angulo1 (float): O primeiro ângulo.
+            angulo2 (float): O segundo ângulo.
+
+        Retorna:
+            float: A soma dos ângulos normalizada no intervalo [-pi, pi].
+        """
+        angulo1 = self.normalize_if_needed(angulo1)
+        angulo2 = self.normalize_if_needed(angulo2)
+        return self.normalize_if_needed(angulo1 + angulo2)
+
+    def _calculate_parking_reward(self, vehicle_theta: float, parking_goal_theta: float) -> float:
+            """Calcula a recompensa por estacionar o veículo baseada na orientação do veículo.
             Valor máximo quando a diferença de orientação é 0, valor mínimo quando é pi/2 ou maior.
             """
-            angle_diff = self._calculate_angle_diff(trailer_theta, parking_goal_theta)
-            
+            angle_diff = self._calculate_angle_diff(vehicle_theta, parking_goal_theta)
             # se é maior que pi/2 (90 graus), apenas recompensa base (entrou de lado/ré errado)
             if abs(angle_diff) > math.pi/2:
                 return self.REWARD_GOAL
-                
             # Normaliza o erro para 0.0 a 1.0
             error_factor = abs(angle_diff) / (math.pi/2)
-            
             # inverte para 1.0 (perfeito) a 0.0 (péssimo)
             alignment_quality = 1.0 - error_factor
-            
             alignment_quality = alignment_quality ** 2
-            
             alignment_bonus = alignment_quality * self.REWARD_ALIGNMENT
-            
+
             return self.REWARD_GOAL + alignment_bonus
 
-    def _check_trailer_jackknife(self, beta: float) -> bool:
-        """Verifica se o trailer do veículo está em jackknife."""
-        return abs(beta) > self.JACKKNIFE_LIMIT_RAD
-
-    def _compute_navigation_map(self):
-        """
-        Calcula um mapa de distâncias usando BFS (Breadth-First Search) a partir do objetivo.
-        Isso cria um campo potencial que guia o agente contornando obstáculos (paredes).
-        """
-        map_w, map_h = self.simulation.map.get_size()
-        self.map_width = int(math.ceil(map_w / self.GRID_RESOLUTION))
-        self.map_height = int(math.ceil(map_h / self.GRID_RESOLUTION))
-        
-        # Inicializa grid: -1 = não visitado, -2 = obstáculo
-        self.distance_map = np.full((self.map_width, self.map_height), -1.0, dtype=np.float32)
-        
-        # 1. Rasteriza obstáculos (entidades colidíveis)
-        for entity in self.simulation.map.get_entities():
-            if entity.is_collidable():
-                self._rasterize_entity(entity, -2.0)
-
-        # 2. Inicializa BFS a partir do objetivo
-        queue = deque()
-        goal = self.simulation.map.get_parking_goal()
-        
-        # Marca células do objetivo com distância 0 e adiciona à fila
-        self._rasterize_entity(goal, 0.0, queue)
-        
-        # 3. Executa BFS (8 vizinhos para melhor aproximação)
-        neighbors = [
-            (0, 1, 1.0), (0, -1, 1.0), (1, 0, 1.0), (-1, 0, 1.0), 
-            (1, 1, 1.414), (1, -1, 1.414), (-1, 1, 1.414), (-1, -1, 1.414)
-        ]
-        
-        while queue:
-            cx, cy = queue.popleft()
-            current_dist = self.distance_map[cx, cy]
-            
-            for dx, dy, cost in neighbors:
-                nx, ny = cx + dx, cy + dy
-                
-                if 0 <= nx < self.map_width and 0 <= ny < self.map_height:
-                    if self.distance_map[nx, ny] == -1.0: # Não visitado e livre
-                        new_dist = current_dist + cost * self.GRID_RESOLUTION
-                        self.distance_map[nx, ny] = new_dist
-                        queue.append((nx, ny))
-
-    def _rasterize_entity(self, entity, value, queue=None):
-        """Marca as células do grid ocupadas por uma entidade."""
-        bbox = entity.get_bounding_box()
-        corners = bbox.get_corners()
-        xs = [c[0] for c in corners]
-        ys = [c[1] for c in corners]
-        
-        # Limites no grid
-        min_x = max(0, int(min(xs) / self.GRID_RESOLUTION))
-        max_x = min(self.map_width - 1, int(max(xs) / self.GRID_RESOLUTION))
-        min_y = max(0, int(min(ys) / self.GRID_RESOLUTION))
-        max_y = min(self.map_height - 1, int(max(ys) / self.GRID_RESOLUTION))
-        
-        for i in range(min_x, max_x + 1):
-            for j in range(min_y, max_y + 1):
-                # Verifica colisão com o centro da célula
-                cx = (i + 0.5) * self.GRID_RESOLUTION
-                cy = (j + 0.5) * self.GRID_RESOLUTION
-                if bbox.contains_point((cx, cy)):
-                    # Se for obstáculo (-2) ou se estamos inicializando o objetivo (e não é parede)
-                    if value == -2.0 or self.distance_map[i, j] != -2.0:
-                        self.distance_map[i, j] = value
-                        if queue is not None:
-                            queue.append((i, j))
-
-    def _get_geodesic_distance(self, position: tuple[float, float]) -> float:
-        """Retorna a distância de navegação da posição até o objetivo."""
-        x, y = position
-        ix = int(x / self.GRID_RESOLUTION)
-        iy = int(y / self.GRID_RESOLUTION)
-        
-        if 0 <= ix < self.map_width and 0 <= iy < self.map_height:
-             dist = self.distance_map[ix, iy]
-             if dist >= 0:
-                 return dist
-        
-        # Fallback para distância Euclidiana se fora do mapa ou dentro de obstáculo
-        return self._calculate_distance_euclidean(position, self.simulation.map.get_parking_goal_position())
-
-    
     # o estado  bruto é x = [x1, y1, θ1, θ2]
     # L é o comprimento da barra de reboque
     # z(x) = [
@@ -400,3 +371,177 @@ class ParkingEnv(gym.Env):
 
     def _normalize_z_vector(self, z_vector: np.ndarray) -> np.ndarray:
         return z_vector / np.linalg.norm(z_vector)
+
+
+
+# Implementação das coordenadas privilegiadas e custo para o carro cinemático
+# Baseado em: "MPC for Non-Holonomic Vehicles Beyond Differential-Drive"
+
+import numpy as np
+from typing import Tuple, Optional, NamedTuple
+from dataclasses import dataclass
+
+
+@dataclass
+class KinematicCarParams:
+    """
+    Parâmetros do carro cinemático.
+    
+    :param wheelbase: Distância entre eixos (l) em metros
+    :type wheelbase: float
+    
+    :param state_weights: Pesos para estados (q1, q2, q3, q4)
+    :type state_weights: Tuple[float, float, float, float]
+    
+    :param input_weights: Pesos para entradas (r1, r2)
+    :type input_weights: Tuple[float, float]
+    """
+    wheelbase: float = 0.2
+    state_weights: Tuple[float, float, float, float] = (1.0, 1.0, 2.0, 3.0)
+    input_weights: Tuple[float, float] = (1.0, 1.0)
+
+
+class PrivilegedCoordinates(NamedTuple):
+    """
+    Resultado do cálculo das coordenadas privilegiadas.
+    
+    :param z: Vetor de coordenadas privilegiadas [z1, z2, z3, z4]
+    :type z: np.ndarray
+    
+    :param weights: Pesos homogêneos w = (w1, w2, w3, w4)
+    :type weights: Tuple[int, int, int, int]
+    
+    :param r: Parâmetros de homogeneidade r = (r1, r2, r3, r4)
+    :type r: Tuple[int, int, int, int]
+    """
+    z: np.ndarray
+    weights: Tuple[int, int, int, int]
+    r: Tuple[int, int, int, int]
+
+
+def compute_privileged_coordinates(
+    state: np.ndarray,
+    goal: np.ndarray,
+    params: KinematicCarParams
+) -> PrivilegedCoordinates:
+    """
+    Calcula as coordenadas privilegiadas z do estado atual em relação ao goal.
+    
+    Para o carro cinemático, as coordenadas privilegiadas são obtidas através
+    do algoritmo de Bellaïche, que transforma o espaço de estados original
+    em um sistema de coordenadas que preserva a controlabilidade do sistema
+    não holonômico.
+    
+    **Transformação (Passo 1 - Bellaïche):**
+    
+    .. math::
+    
+        y = A^{-T}(x - d)
+    
+    onde :math:`A` é a matriz formada pelos campos vetoriais avaliados no setpoint.
+    
+    Para o carro cinemático na origem (:math:`d = 0`):
+    
+    .. math::
+    
+        y = \\begin{bmatrix} x_1 \\\\ x_4 \\\\ -l \\cdot x_3 \\\\ l \\cdot x_2 \\end{bmatrix}
+    
+    **Parâmetros de Homogeneidade:**
+    
+    - Pesos: :math:`w = (1, 1, 2, 3)`
+    - Parâmetros r: :math:`r = (1, 1, 2, 3)`
+    - Grau de não holonomia: :math:`\\rho = 3`
+    
+    :param state: Estado atual do veículo [x, y, θ, φ]
+    :type state: np.ndarray
+    
+    :param goal: Estado desejado (setpoint) [x_d, y_d, θ_d, φ_d]
+    :type goal: np.ndarray
+    
+    :param params: Parâmetros do carro cinemático
+    :type params: KinematicCarParams
+    
+    :returns: Coordenadas privilegiadas e parâmetros de homogeneidade
+    :rtype: PrivilegedCoordinates
+    
+    :raises ValueError: Se state ou goal não tiverem dimensão 4
+    
+    .. note::
+    
+        Para setpoints com :math:`\\phi_d = 0`, vale :math:`z = y`.
+        Para setpoints gerais, o segundo passo do algoritmo de Bellaïche
+        é necessário.
+    
+    **Exemplo de uso:**
+    
+    .. code-block:: python
+    
+        params = KinematicCarParams(wheelbase=0.2)
+        state = np.array([0.5, 0.3, 0.1, 0.05])
+        goal = np.array([0.0, 0.0, 0.0, 0.0])
+        
+        result = compute_privileged_coordinates(state, goal, params)
+        print(f"z = {result.z}")
+        print(f"Pesos w = {result.weights}")
+    
+    **Referências:**
+    
+    .. [1] Rosenfelder et al. "MPC for Non-Holonomic Vehicles Beyond 
+           Differential-Drive", arXiv:2205.11400, 2022.
+    .. [2] Jean, F. "Control of Nonholonomic Systems: From Sub-Riemannian
+           Geometry to Motion Planning", Springer, 2014.
+    """
+    if len(state) != 4 or len(goal) != 4:
+        raise ValueError("State e goal devem ter dimensão 4: [x, y, θ, φ]")
+    
+    state = np.asarray(state, dtype=float)
+    goal = np.asarray(goal, dtype=float)
+    l = params.wheelbase
+    
+    # Diferença do estado em relação ao goal
+    dx = state - goal
+    x1, x2, x3, x4 = dx[0], dx[1], dx[2], dx[3]
+    
+    # =========================================================================
+    # Passo 1: Transformação de Bellaïche (Eq. 18 do paper)
+    # =========================================================================
+    # Matriz do referencial adaptado avaliado na origem:
+    # [X1, X2, X3, X4]_0 forma a base do espaço tangente
+    #
+    # Para o carro cinemático com setpoint na origem:
+    # y = [x1, x4, -l*x3, l*x2]^T
+    # =========================================================================
+    
+    y = np.array([
+        x1,           # y1 = x1 (direção facilmente controlável)
+        x4,           # y2 = φ (ângulo de esterçamento)
+        -l * x3,      # y3 = -l*θ (orientação escalada)
+        l * x2        # y4 = l*y (direção mais difícil de controlar)
+    ])
+    
+    # =========================================================================
+    # Passo 2: Correções polinomiais (Eq. 8 do paper)
+    # =========================================================================
+    # Para setpoints com φ_d = 0 (goal[3] = 0), as derivadas não holonômicas
+    # relevantes desaparecem, resultando em z = y.
+    #
+    # Para setpoints gerais, seria necessário calcular h_{4,2}(y1, y2, y3)
+    # =========================================================================
+    
+    if np.abs(goal[3]) < 1e-10:
+        # Caso simplificado: z = y
+        z = y.copy()
+    else:
+        # Caso geral: aplicar segundo passo de Bellaïche
+        # z_j = y_j - sum_{k=2}^{w_j-1} h_{j,k}(y)
+        # Para o carro, apenas z4 requer correção
+        z = y.copy()
+        # h_{4,2} envolve derivadas não holonômicas de ordem superior
+        # Implementação completa requer cálculo simbólico adicional
+        # Por simplicidade, mantemos z = y (aproximação válida próximo à origem)
+    
+    # Parâmetros de homogeneidade do carro cinemático
+    weights = (1, 1, 2, 3)  # w = (w1, w2, w3, w4)
+    r = (1, 1, 2, 3)        # r = (r1, r2, r3, r4)
+    
+    return PrivilegedCoordinates(z=z, weights=weights, r=r)

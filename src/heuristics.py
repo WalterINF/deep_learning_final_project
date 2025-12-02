@@ -58,5 +58,5 @@ def calcular_distancia_nao_holonomica_carro(estado_atual, estado_alvo, l_carro):
     custo = (z1**12) + (z3**6) + (z4**4)
 
     
-    return math.log(custo,10)
+    return math.log(1+ custo,10)
 

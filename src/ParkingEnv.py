@@ -22,12 +22,12 @@ class ParkingEnv(gym.Env):
     DT = 0.2 # tempo do passo de simulação
     MAX_SECONDS = 90.0
     MAX_STEPS = int(MAX_SECONDS / DT)
-    VEHICLE_PARKED_THRESHOLD_M = 0.3 # distancia minima entre centro do veículo e centro da vaga para considerar o veículo estacionado
+    VEHICLE_PARKED_THRESHOLD_M = 1.0 # distancia minima entre centro do veículo e centro da vaga para considerar o veículo estacionado
     VEHICLE_PARKED_THRESHOLD_ANGLE = float(np.deg2rad(5.0)) # angulo maximo de desalinhamento para considerar o veículo estacionado
 
     ## recompensas
     REWARD_GOAL = 100.0 # recompensa por chegar ao objetivo 
-    REWARD_ALIGNMENT = 100.0 # recompensa adicional por alinhar o veículo na vaga corretamente
+    REWARD_ALIGNMENT = 0.0 # recompensa adicional por alinhar o veículo na vaga corretamente
     REWARD_PROGRESS = 1.0 # multiplicador da recompensa da heurística 
     REWARD_HEADING = 0.0 # recompensa por apontar em direção ao objetivo (desabilitar por enquanto)
     MAX_PUNISHMENT_TIME_PER_EPISODE = -10.0 # penalidade maxima por tempo 

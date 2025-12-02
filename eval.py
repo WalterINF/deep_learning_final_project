@@ -10,7 +10,7 @@ import src.Visualization as Visualization
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_SAVE_DIR = os.path.join(SCRIPT_DIR, "models")
-MODEL_NAME = None  # None para carregar o modelo mais recentemente atualizado, ou um nome específico como "SAC_Improved_V1"
+MODEL_NAME = "SAC_Improved_V9"  # None para carregar o modelo mais recentemente atualizado, ou um nome específico como "SAC_Improved_V1"
 
 def get_latest_model(model_dir):
     """Encontra o arquivo .zip mais recentemente modificado no diretório de modelos."""

@@ -28,7 +28,7 @@ class ParkingEnv(gym.Env):
     ## recompensas
     REWARD_GOAL = 100.0 # recompensa por chegar ao objetivo 
     REWARD_ALIGNMENT = 100.0 # recompensa adicional por alinhar o veículo na vaga corretamente
-    REWARD_PROGRESS = 0.0 # recompensa por metro de progresso 
+    REWARD_PROGRESS = 1.0 # multiplicador da recompensa da heurística 
     REWARD_HEADING = 0.0 # recompensa por apontar em direção ao objetivo (desabilitar por enquanto)
     MAX_PUNISHMENT_TIME_PER_EPISODE = -10.0 # penalidade maxima por tempo 
     PUNISHMENT_TIME = MAX_PUNISHMENT_TIME_PER_EPISODE / MAX_STEPS # penalidade por tempo a cada passo
@@ -198,7 +198,7 @@ class ParkingEnv(gym.Env):
                 terminated = True
                 reward = self.PUNISHMENT_COLLISION
  
-        # recompensa por progresso (redução de distância)
+        # recompensa por progresso (redução de distância) <-- aqui é definida a heurística
         reward += (self.last_distance_to_goal - new_distance_to_goal) * self.REWARD_PROGRESS
         self.last_distance_to_goal = new_distance_to_goal
 
@@ -272,10 +272,10 @@ class ParkingEnv(gym.Env):
             if abs(angle_diff) > math.pi/2:
                 return self.REWARD_GOAL
                 
-            # Normaliza o erro para 0.0 (perfeito) a 1.0 (péssimo/90 graus)
+            # Normaliza o erro para 0.0 a 1.0
             error_factor = abs(angle_diff) / (math.pi/2)
             
-            # Inverte para 1.0 (perfeito) a 0.0 (péssimo)
+            # inverte para 1.0 (perfeito) a 0.0 (péssimo)
             alignment_quality = 1.0 - error_factor
             
             alignment_quality = alignment_quality ** 2

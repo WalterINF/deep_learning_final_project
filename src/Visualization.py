@@ -211,7 +211,7 @@ def to_rgb_array(
         if heuristic_value is not None:
             heuristic_text = f"Heuristic: {heuristic_value:.2f}"
             raycast_surface = font.render(heuristic_text, True, (0, 0, 0))
-            surface.blit(raycast_surface, (50, 175 - 4 * 20))
+            surface.blit(raycast_surface, (10, 130))
 
 
 

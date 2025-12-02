@@ -1,4 +1,4 @@
-- [ ] Mudar o mapa físico para 2 fileiras de vagas frente a frente
+- [X] Mudar o mapa físico para 2 fileiras de vagas frente a frente
 - [ ] Coordenadas privilegiadas do trator-trailer
 - [ ] Heurística de distância não holonômica do trator-trailer
 - [ ] checar hiperparametros se for o caso. 

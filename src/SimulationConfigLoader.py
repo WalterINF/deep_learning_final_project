@@ -102,20 +102,15 @@ class DefaultMapGenerator(MapGenerator):
 
     def generate_map(self) -> Map:
         map = Map((self.MAP_WIDTH, self.MAP_HEIGHT))
-        # parede esquerda
-        map.add_entity(MapEntity(position_x=0, position_y=self.MAP_HEIGHT/2, width=self.WALL_WIDTH, length=self.MAP_HEIGHT, theta=math.pi/2, type=MapEntity.ENTITY_WALL))
-        # parede direita
+        map.add_entity(MapEntity(position_x=0, position_y=self.MAP_HEIGHT/2, width=self.WALL_WIDTH, length=self.MAP_HEIGHT, theta=math.pi/2, type=MapEntity.ENTITY_WALL))  
         map.add_entity(MapEntity(position_x=self.MAP_WIDTH, position_y=self.MAP_HEIGHT/2, width=self.WALL_WIDTH, length=self.MAP_HEIGHT, theta=-math.pi/2, type=MapEntity.ENTITY_WALL))
-        # parede superior
         map.add_entity(MapEntity(position_x=self.MAP_WIDTH/2, position_y=0, width=self.WALL_WIDTH, length=self.MAP_WIDTH, theta=0.0, type=MapEntity.ENTITY_WALL))
-        # parede inferior
         map.add_entity(MapEntity(position_x=self.MAP_WIDTH/2, position_y=self.MAP_HEIGHT, width=self.WALL_WIDTH, length=self.MAP_WIDTH, theta=0.0, type=MapEntity.ENTITY_WALL))
 
-        parking_lots_rows_heights = [i * self.MAP_HEIGHT/(self.N_ROWS + 1) for i in range(1, self.N_ROWS + 1)]
         parking_lots_end_x = self.MAP_WIDTH - self.SPAWN_PADDING - self.PARKING_SLOT_WIDTH/2
 
-        top_row_height = self.MAP_HEIGHT/3
-        bottom_row_height = 2*self.MAP_HEIGHT/3
+        top_row_height = self.MAP_HEIGHT/4
+        bottom_row_height = 3*self.MAP_HEIGHT/4
 
         map.add_entity(MapEntity(position_x=self.MAP_WIDTH/2, position_y=top_row_height, width=self.MAP_WIDTH - 2*self.SPAWN_PADDING, length=1.0, theta=math.pi/2, type=MapEntity.ENTITY_WALL))
         parking_lots_start_x = self.SPAWN_PADDING + self.PARKING_SLOT_WIDTH/2
@@ -123,10 +118,10 @@ class DefaultMapGenerator(MapGenerator):
         while parking_lots_start_x < parking_lots_end_x:
             upper_parking_slot = MapEntity(
                 position_x=parking_lots_start_x, 
-                position_y=top_row_height - self.PARKING_SLOT_HEIGHT/2.0 - self.WALL_PADDING, 
+                position_y=top_row_height + self.PARKING_SLOT_HEIGHT/2.0 + self.WALL_PADDING, 
                 width=self.PARKING_SLOT_WIDTH, 
                 length=self.PARKING_SLOT_HEIGHT, 
-                theta=-math.pi/2, 
+                theta=math.pi/2, 
                 type=MapEntity.ENTITY_PARKING_SLOT)
             map.add_entity(upper_parking_slot)
             parking_lots_start_x += self.PARKING_SLOT_WIDTH
@@ -137,19 +132,15 @@ class DefaultMapGenerator(MapGenerator):
         while parking_lots_start_x < parking_lots_end_x:
             lower_parking_slot = MapEntity(
                 position_x=parking_lots_start_x, 
-                position_y=bottom_row_height + self.PARKING_SLOT_HEIGHT/2.0 + self.WALL_PADDING, 
+                position_y=bottom_row_height - self.PARKING_SLOT_HEIGHT/2.0 - self.WALL_PADDING, 
                 width=self.PARKING_SLOT_WIDTH, 
                 length=self.PARKING_SLOT_HEIGHT, 
-                theta=math.pi/2, 
+                theta=-math.pi/2, 
                 type=MapEntity.ENTITY_PARKING_SLOT)
             map.add_entity(lower_parking_slot)
             parking_lots_start_x += self.PARKING_SLOT_WIDTH
 
-
-
-
-
-        ## escolhe uma das vagas para se tornar o ponoito de partida e o objetivo de estacionamento
+        ## escolhe uma das vagas para se tornar o ponto de partida e o objetivo de estacionamento
         chosen_parking_slot = map.get_random_parking_slot()
         chosen_parking_slot.type = MapEntity.ENTITY_PARKING_GOAL
         map.parking_goal = chosen_parking_slot
@@ -172,106 +163,6 @@ class DefaultMapGenerator(MapGenerator):
 
         return map
 
-class ComplexMapGenerator(MapGenerator):
-
-    MAP_WIDTH = 180.0
-    MAP_HEIGHT = 180.0
-    WALL_WIDTH = 4.0
-    PARKING_SLOT_WIDTH = 4.5
-    PARKING_SLOT_HEIGHT = 12.0
-    SPAWN_PADDING = 20.0
-    PARKING_LOTS_ROW_SPACING = 25.0
-    CHUNK_DIVISIONS = (3,3)
-    CHUNK_SIZE = (MAP_WIDTH/CHUNK_DIVISIONS[0], MAP_HEIGHT/CHUNK_DIVISIONS[1])
-    CHUNK_WALL_PADDING = 30.0
-    CHUNK_PARKING_LOT_PADDING = 15.0
-    
-    CHUNK_EMPTY = 0
-    CHUNK_BUILDING = 1
-    CHUNK_PARKING_LOT_SINGLE = 2
-    CHUNK_PARKING_LOT_DOUBLE = 3
-
-    def generate_map(self) -> Map:
-        map = Map((self.MAP_WIDTH, self.MAP_HEIGHT))
-        
-        # parede esquerda
-        map.add_entity(MapEntity(position_x=0, position_y=self.MAP_HEIGHT/2, width=self.WALL_WIDTH, length=self.MAP_HEIGHT, theta=math.pi/2, type=MapEntity.ENTITY_WALL))
-        # parede direita
-        map.add_entity(MapEntity(position_x=self.MAP_WIDTH, position_y=self.MAP_HEIGHT/2, width=self.WALL_WIDTH, length=self.MAP_HEIGHT, theta=-math.pi/2, type=MapEntity.ENTITY_WALL))
-        # parede superior
-        map.add_entity(MapEntity(position_x=self.MAP_WIDTH/2, position_y=0, width=self.WALL_WIDTH, length=self.MAP_WIDTH, theta=0.0, type=MapEntity.ENTITY_WALL))
-        # parede inferior
-        map.add_entity(MapEntity(position_x=self.MAP_WIDTH/2, position_y=self.MAP_HEIGHT, width=self.WALL_WIDTH, length=self.MAP_WIDTH, theta=0.0, type=MapEntity.ENTITY_WALL))
-
-
-        map_matrix = np.zeros(self.CHUNK_DIVISIONS, dtype=int)
-
-        # define o chunk [1,1] como estacionamento obrigatório
-        map_matrix[1,1] = random.choice([self.CHUNK_PARKING_LOT_SINGLE, self.CHUNK_PARKING_LOT_DOUBLE])
-
-
-        # não sobrescrever o [1,1] no sorteio
-        for i in range(self.CHUNK_DIVISIONS[0]):
-            for j in range(self.CHUNK_DIVISIONS[1]):
-                if (i, j) == (1, 1):
-                    continue
-                map_matrix[i,j] = random.choice([self.CHUNK_EMPTY,self.CHUNK_BUILDING, self.CHUNK_PARKING_LOT_SINGLE, self.CHUNK_PARKING_LOT_DOUBLE])
-
-        for i in range(self.CHUNK_DIVISIONS[0]):
-            for j in range(self.CHUNK_DIVISIONS[1]):
-                chunk_center_x = i*self.CHUNK_SIZE[0] + self.CHUNK_SIZE[0]/2
-                chunk_center_y = j*self.CHUNK_SIZE[1] + self.CHUNK_SIZE[1]/2
-                chunk_start_x = i*self.CHUNK_SIZE[0]
-                chunk_start_y = j*self.CHUNK_SIZE[1]
-                chunk_end_x = chunk_start_x + self.CHUNK_SIZE[0]
-                chunk_end_y = chunk_start_y + self.CHUNK_SIZE[1]
-                if map_matrix[i,j] == self.CHUNK_BUILDING:
-                    #preenche o chunk com um edifício
-                    map.add_entity(MapEntity(position_x=chunk_center_x, position_y=chunk_center_y, width=self.CHUNK_SIZE[0] - self.CHUNK_WALL_PADDING, length=self.CHUNK_SIZE[1] - self.CHUNK_WALL_PADDING, theta=0.0, type=MapEntity.ENTITY_WALL))
-                elif map_matrix[i,j] == self.CHUNK_PARKING_LOT_SINGLE:
-                    #preenche com uma fileira de vagas de estacionamento
-                    vertical_or_horizontal = random.choice([True, False])
-                    if vertical_or_horizontal:
-                        parking_lot_row_start_y = chunk_start_y + self.CHUNK_PARKING_LOT_PADDING
-                        parking_lot_row_end_y = chunk_end_y - self.CHUNK_PARKING_LOT_PADDING
-                        while parking_lot_row_start_y < parking_lot_row_end_y:
-                            map.add_entity(MapEntity(position_x=chunk_center_x, position_y=parking_lot_row_start_y, width=self.PARKING_SLOT_WIDTH, length=self.PARKING_SLOT_HEIGHT, theta=random.choice([0.0, math.pi]), type=MapEntity.ENTITY_PARKING_SLOT))
-                            parking_lot_row_start_y += self.PARKING_SLOT_WIDTH
-                    else:
-                        parking_lot_row_start_x = chunk_start_x + self.CHUNK_PARKING_LOT_PADDING
-                        parking_lot_row_end_x = chunk_end_x - self.CHUNK_PARKING_LOT_PADDING
-                        while parking_lot_row_start_x < parking_lot_row_end_x:
-                            map.add_entity(MapEntity(position_x=parking_lot_row_start_x, position_y=chunk_center_y, width=self.PARKING_SLOT_WIDTH, length=self.PARKING_SLOT_HEIGHT, theta=random.choice([-math.pi/2, math.pi/2]), type=MapEntity.ENTITY_PARKING_SLOT))
-                            parking_lot_row_start_x += self.PARKING_SLOT_WIDTH
-                elif map_matrix[i,j] == self.CHUNK_PARKING_LOT_DOUBLE:
-                    #preenche com duas fileiras de vagas de estacionamento
-                    vertical_or_horizontal = random.choice([True, False])
-                    if vertical_or_horizontal:
-                        parking_lot_row_start_y = chunk_start_y + self.CHUNK_PARKING_LOT_PADDING
-                        parking_lot_row_end_y = chunk_end_y - self.CHUNK_PARKING_LOT_PADDING
-                        while parking_lot_row_start_y < parking_lot_row_end_y:
-                            map.add_entity(MapEntity(position_x=chunk_start_x + self.PARKING_SLOT_HEIGHT, position_y=parking_lot_row_start_y, width=self.PARKING_SLOT_WIDTH, length=self.PARKING_SLOT_HEIGHT, theta=0.0, type=MapEntity.ENTITY_PARKING_SLOT))
-                            map.add_entity(MapEntity(position_x=chunk_end_x - self.PARKING_SLOT_HEIGHT, position_y=parking_lot_row_start_y, width=self.PARKING_SLOT_WIDTH, length=self.PARKING_SLOT_HEIGHT, theta=math.pi, type=MapEntity.ENTITY_PARKING_SLOT))
-                            parking_lot_row_start_y += self.PARKING_SLOT_WIDTH
-                    else:
-                        parking_lot_row_start_x = chunk_start_x + self.CHUNK_PARKING_LOT_PADDING
-                        parking_lot_row_end_x = chunk_end_x - self.CHUNK_PARKING_LOT_PADDING
-                        while parking_lot_row_start_x < parking_lot_row_end_x:
-                            map.add_entity(MapEntity(position_x=parking_lot_row_start_x, position_y=chunk_start_y + self.PARKING_SLOT_HEIGHT, width=self.PARKING_SLOT_WIDTH, length=self.PARKING_SLOT_HEIGHT, theta=math.pi/2, type=MapEntity.ENTITY_PARKING_SLOT))
-                            map.add_entity(MapEntity(position_x=parking_lot_row_start_x, position_y=chunk_end_y - self.PARKING_SLOT_HEIGHT, width=self.PARKING_SLOT_WIDTH, length=self.PARKING_SLOT_HEIGHT, theta=-math.pi/2, type=MapEntity.ENTITY_PARKING_SLOT))
-                            parking_lot_row_start_x += self.PARKING_SLOT_WIDTH
-        
-        ## escolhe uma das vagas para se tornar o ponto de partida e o objetivo de estacionamento
-        chosen_parking_slot = map.get_random_parking_slot()
-        chosen_parking_slot.type = MapEntity.ENTITY_PARKING_GOAL
-        map.parking_goal = chosen_parking_slot
-
-        chosen_parking_slot = map.get_random_parking_slot()
-        chosen_parking_slot.type = MapEntity.ENTITY_START
-        map.start_position = chosen_parking_slot
-
-
-        return map
 
 
 

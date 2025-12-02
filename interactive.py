@@ -22,7 +22,7 @@ from src.ParkingEnv import ParkingEnv
 
 def main():
     # Create environment
-    env = ParkingEnv()
+    env = ParkingEnv(heuristica="manhattan")
     obs, info = env.reset()
     
     # Control parameters

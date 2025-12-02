@@ -5,27 +5,6 @@ import math
 
 class TestEnv(unittest.TestCase):
 
-    def test_trailer_jackknife(self):
-        env = ParkingEnv()
-        env.reset()
-        action = env.action_space.sample()
-        env.step(action)
-        
-
-        is_jackknife = env._check_trailer_jackknife(env.JACKKNIFE_LIMIT_RAD + 0.1)
-        self.assertTrue(is_jackknife)
-
-        is_jackknife = env._check_trailer_jackknife(-env.JACKKNIFE_LIMIT_RAD - 0.1)
-        self.assertTrue(is_jackknife)
-
-        is_jackknife = env._check_trailer_jackknife(0.0)
-        self.assertFalse(is_jackknife)
-
-        is_jackknife = env._check_trailer_jackknife(env.JACKKNIFE_LIMIT_RAD - 0.1)
-        self.assertFalse(is_jackknife)
-
-        is_jackknife = env._check_trailer_jackknife(-env.JACKKNIFE_LIMIT_RAD + 0.1)
-        self.assertFalse(is_jackknife)
 
     def test_calculate_angle_diff(self):
         env = ParkingEnv()

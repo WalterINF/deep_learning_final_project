@@ -348,7 +348,13 @@ class Vehicle():
         return self.largura
 
     def get_state(self) -> np.ndarray:
-        """retorna o estado do veículo como um array numpy"""
+        """retorna o estado do veículo como um array numpy, 
+        o estado é dado por: [x, y, theta, alpha] (radianos), onde:
+        - x: posição x do veículo
+        - y: posição y do veículo
+        - theta: ângulo de orientação do veículo
+        - alpha: ângulo de esterçamento do veículo
+        """
         return np.array([self.position_x, self.position_y, self.theta, self.alpha])
 
     def get_wheelbase(self) -> float:

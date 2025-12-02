@@ -1,13 +1,11 @@
 import numpy as np
 import gymnasium as gym
-from src import Simulation
 from src.SimulationConfigLoader import SimulationLoader
-from src.Simulation import MapEntity, Vehicle
 import src.Visualization as Visualization
-from typing import Any, SupportsFloat
+from typing import Any, SupportsFloat, Tuple, NamedTuple
 import math
-from collections import deque
 from src.heuristics import calcular_distancia_nao_holonomica_carro
+from dataclasses import dataclass
 
 
 class ParkingEnv(gym.Env):
@@ -27,9 +25,7 @@ class ParkingEnv(gym.Env):
 
     ## recompensas
     REWARD_GOAL = 100.0 # recompensa por chegar ao objetivo 
-    REWARD_ALIGNMENT = 0.0 # recompensa adicional por alinhar o veículo na vaga corretamente
-    REWARD_PROGRESS = 1.0 # multiplicador da recompensa da heurística 
-    REWARD_HEADING = 0.0 # recompensa por apontar em direção ao objetivo (desabilitar por enquanto)
+    REWARD_PROGRESS_MULTIPLIER = 1.0 # multiplicador da recompensa da heurística 
     MAX_PUNISHMENT_TIME_PER_EPISODE = -10.0 # penalidade maxima por tempo 
     PUNISHMENT_TIME = MAX_PUNISHMENT_TIME_PER_EPISODE / MAX_STEPS # penalidade por tempo a cada passo
     PUNISHMENT_ZERO_SPEED = -0.1 # penalidade por velocidade zero 
@@ -37,12 +33,20 @@ class ParkingEnv(gym.Env):
     PUNISHMENT_JACKKNIFE = -100.0 # penalidade por jackknife
 
     ## heuristicas
-    HEURSITICAS_DISPONIVEIS = {"nao_holonomica", "euclidiana", "nenhuma", "manhattan"}
+    HEURSITICAS_DISPONIVEIS = {"nao_holonomica", "euclidiana", "manhattan", "nenhuma"}
 
-    def __init__(self, seed = 0, heuristica = "nao_holonomica"):
+    def __init__(self, seed: int = 0, heuristica: str = "nao_holonomica"):
+        """
+        Inicializa o ambiente de estacionamento.
+
+        :param seed: Semente para o ambiente.
+        :param heuristica: Heurística de distância a ser usada (nao_holonomica, euclidiana, manhattan, nenhuma)
+        """
+        if heuristica not in self.HEURSITICAS_DISPONIVEIS:
+            raise ValueError(f"Heurística inválida: {heuristica}")
+        self.heuristica = heuristica
 
         self.render_mode = "rgb_array"
-
 
         self.simulation_loader = SimulationLoader()
 
@@ -55,7 +59,7 @@ class ParkingEnv(gym.Env):
         self.steps = 0
         self.total_reward = 0.0
 
-        self.initial_distance_to_goal = self._calculate_holonomic_distance()
+        self.initial_distance_to_goal = self._calculate_heuristic_value(self.heuristica)
         self.last_distance_to_goal = self.initial_distance_to_goal
 
         # o estado  bruto é x = [x1, y1, θ1, θ2]
@@ -120,7 +124,7 @@ class ParkingEnv(gym.Env):
         self.steps = 0
         self.total_reward = 0.0
         
-        self.initial_distance_to_goal = self._calculate_holonomic_distance()
+        self.initial_distance_to_goal = self._calculate_heuristic_value(self.heuristica)
         self.last_distance_to_goal = self.initial_distance_to_goal
 
         # Build observação
@@ -159,32 +163,29 @@ class ParkingEnv(gym.Env):
         terminated = False
         truncated = False
         info = {}
+
         reward = self.PUNISHMENT_TIME  # penalidade base por passo de tempo
 
         self.simulation.move_vehicle(velocity, alpha, self.DT)
 
-        goal_pos = self.simulation.map.get_parking_goal_position()
-        goal_theta = self.simulation.map.get_parking_goal_theta()
-
         if abs(velocity) < 0.1:
             reward += self.PUNISHMENT_ZERO_SPEED
         
-        new_distance_to_goal = self._calculate_holonomic_distance()
-        
+
         # verificação de terminação
         if self.steps >= self.MAX_STEPS:
             truncated = True
         elif self._check_vehicle_parking():
             terminated = True
-            reward = self._calculate_parking_reward(self.simulation.vehicle.get_theta(), goal_theta)
+            reward = self.REWARD_GOAL
             info["is_success"] = True
-        else:
-            collided = self._check_vehicle_collision()
-            if collided:
-                terminated = True 
-                reward = self.PUNISHMENT_COLLISION
-        # recompensa por progresso (redução de distância) <-- aqui é definida a heurística
-        reward += (self.last_distance_to_goal - new_distance_to_goal) * self.REWARD_PROGRESS
+        elif self._check_vehicle_collision():
+            terminated = True 
+            reward = self.PUNISHMENT_COLLISION
+
+        # recompensa por progresso baseada na heurística
+        new_distance_to_goal = self._calculate_heuristic_value(self.heuristica)
+        reward += (self.last_distance_to_goal - new_distance_to_goal) * self.REWARD_PROGRESS_MULTIPLIER
         self.last_distance_to_goal = new_distance_to_goal
 
         observation = self._build_observation()
@@ -203,12 +204,25 @@ class ParkingEnv(gym.Env):
             distance_map=None,
             grid_resolution=self.GRID_RESOLUTION,
             observation=self._build_observation(),
-            heuristic_value=self._calculate_holonomic_distance()
+            heuristic_value=self._calculate_heuristic_value(self.heuristica)
         )
         return rgb_array
 
     def close(self):
         pass
+
+    def _calculate_heuristic_value(self, heuristic: str) -> float:
+        if heuristic == "nao_holonomica":
+            return self._calculate_nao_holonomic_distance()
+        elif heuristic == "euclidiana":
+            return self._calculate_distance_euclidean(self.simulation.vehicle.get_position(), self.simulation.map.get_parking_goal_position())
+        elif heuristic == "manhattan":
+            return self._calculate_distance_manhattan(self.simulation.vehicle.get_position(), self.simulation.map.get_parking_goal_position())
+        elif heuristic == "nenhuma":
+            return 0.0
+        else:
+            raise ValueError(f"Heurística inválida: {heuristic}")
+
 
     def _check_vehicle_collision(self) -> bool:
         """Verifica se o veículo colidiu com alguma parede"""
@@ -220,6 +234,10 @@ class ParkingEnv(gym.Env):
                     
     def _calculate_distance_euclidean(self, position: tuple[float, float], goal_position: tuple[float, float]):
         distance_to_goal = np.sqrt((position[0] - goal_position[0])**2 + (position[1] - goal_position[1])**2)
+        return distance_to_goal
+
+    def _calculate_distance_manhattan(self, position: tuple[float, float], goal_position: tuple[float, float]):
+        distance_to_goal = abs(position[0] - goal_position[0]) + abs(position[1] - goal_position[1])
         return distance_to_goal
 
     def _calculate_goal_proximity(self, position: tuple[float, float], goal_position: tuple[float, float]):
@@ -244,7 +262,7 @@ class ParkingEnv(gym.Env):
         angle_diff = np.arctan2(np.sin(diff), np.cos(diff))
         return angle_diff
 
-    def _calculate_holonomic_distance(self):
+    def _calculate_nao_holonomic_distance(self):
         position_car_x, position_car_y = self.simulation.vehicle.get_position()
         car_theta = self.simulation.vehicle.get_theta()
         position_goal_x, position_goal_y = self.simulation.map.get_parking_goal_position()
@@ -318,72 +336,9 @@ class ParkingEnv(gym.Env):
         angulo2 = self.normalize_if_needed(angulo2)
         return self.normalize_if_needed(angulo1 + angulo2)
 
-    def _calculate_parking_reward(self, vehicle_theta: float, parking_goal_theta: float) -> float:
-            """Calcula a recompensa por estacionar o veículo baseada na orientação do veículo.
-            Valor máximo quando a diferença de orientação é 0, valor mínimo quando é pi/2 ou maior.
-            """
-            angle_diff = self._calculate_angle_diff(vehicle_theta, parking_goal_theta)
-            # se é maior que pi/2 (90 graus), apenas recompensa base (entrou de lado/ré errado)
-            if abs(angle_diff) > math.pi/2:
-                return self.REWARD_GOAL
-            # Normaliza o erro para 0.0 a 1.0
-            error_factor = abs(angle_diff) / (math.pi/2)
-            # inverte para 1.0 (perfeito) a 0.0 (péssimo)
-            alignment_quality = 1.0 - error_factor
-            alignment_quality = alignment_quality ** 2
-            alignment_bonus = alignment_quality * self.REWARD_ALIGNMENT
-
-            return self.REWARD_GOAL + alignment_bonus
-
-    # o estado  bruto é x = [x1, y1, θ1, θ2]
-    # L é o comprimento da barra de reboque
-    # z(x) = [
-    # (x_1-x_g)*cos(theta_1g) + (y_1-y_g)*sin(theta_1g),
-    # (theta_1 - theta_1g),
-    # −(x_1 − x_g ) sin theta_1g + (y_1 − y_g ) cos theta_1g
-    # z3 − L · sin(z2 − (theta_2 − theta_2g ))]
-    def _compute_z1(self, x1: float, y1: float, xg: float, yg: float, theta1g: float) -> float:
-        return (x1 - xg) * math.cos(theta1g) + (y1 - yg) * math.sin(theta1g)
-
-    def _compute_z2(self, theta1: float, theta1g: float) -> float:
-        return theta1 - theta1g
-
-    def _compute_z3(self, x1: float, y1: float, xg: float, yg: float, theta1g: float) -> float:
-        return -(x1 - xg) * math.sin(theta1g) + (y1 - yg) * math.cos(theta1g)
-
-    def _compute_z4(self, z2, z3, L, theta2, theta2g):
-        return z3 - L * math.sin(z2 - (theta2 - theta2g))
-
-    def _compute_z_vector(
-        self, 
-        x1: float, # posição do trator x
-        y1: float, # posição do trator y
-        xg: float, #posiçaõ do alvo
-        yg: float, #posição do alvo
-        theta1: float, # ângulo de orientação do trator
-        theta1g: float, # ângulo de orientação do alvo
-        theta2: float, # ângulo de orientação do trailer
-        theta2g: float, # ângulo de orientação do alvo
-        L: float) -> np.ndarray:
-
-        z1 = self._compute_z1(x1, y1, xg, yg, theta1g)
-        z2 = self._compute_z2(theta1, theta1g)
-        z3 = self._compute_z3(x1, y1, xg, yg, theta1g)
-        z4 = self._compute_z4(z2, z3, L, theta2, theta2g)
-        return np.array([z1, z2, z3, z4])
-
-    def _normalize_z_vector(self, z_vector: np.ndarray) -> np.ndarray:
-        return z_vector / np.linalg.norm(z_vector)
-
-
 
 # Implementação das coordenadas privilegiadas e custo para o carro cinemático
 # Baseado em: "MPC for Non-Holonomic Vehicles Beyond Differential-Drive"
-
-import numpy as np
-from typing import Tuple, Optional, NamedTuple
-from dataclasses import dataclass
-
 
 @dataclass
 class KinematicCarParams:

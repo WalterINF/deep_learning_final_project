@@ -4,8 +4,8 @@ from src.SimulationConfigLoader import SimulationLoader
 import src.Visualization as Visualization
 from typing import Any, SupportsFloat, Tuple, NamedTuple
 import math
-from src.heuristics import calcular_distancia_nao_holonomica_carro
 from dataclasses import dataclass
+import numba as nb
 
 
 class ParkingEnv(gym.Env):
@@ -21,7 +21,7 @@ class ParkingEnv(gym.Env):
     MAX_SECONDS = 90.0
     MAX_STEPS = int(MAX_SECONDS / DT)
     VEHICLE_PARKED_THRESHOLD_M = 2.0 # distancia minima entre centro do TRAILER e centro da vaga para considerar o veículo estacionado
-    VEHICLE_PARKED_THRESHOLD_ANGLE = float(np.deg2rad(5.0)) # angulo maximo de desalinhamento do TRAILER para considerar o veículo estacionado
+    VEHICLE_PARKED_THRESHOLD_ANGLE = float(np.deg2rad(10.0)) # angulo maximo de desalinhamento do TRAILER para considerar o veículo estacionado
     JACKKNIFE_LIMIT_RAD = float(np.deg2rad(45.0)) # angulo maximo de desalinhamento do TRAILER para considerar o veículo em jackknife (45 graus)
 
     ## recompensas
@@ -268,11 +268,12 @@ class ParkingEnv(gym.Env):
         return angle_diff
 
     def _calculate_nao_holonomic_distance(self):
+        """Calcula a distância não holonômica entre o veículo e a vaga de estacionamento."""
         goal_state = [
             self.simulation.map.get_parking_goal_position()[0], 
             self.simulation.map.get_parking_goal_position()[1], 
-            self.simulation.map.get_parking_goal_theta(), 
-            0.0] # phi_d = 0
+            -self.simulation.map.get_parking_goal_theta(), 
+            0.0] 
         
         tractor_state = self.simulation.vehicle.get_tractor_state()
         return self.tractor_trailer_geometry.homogeneous_distance(

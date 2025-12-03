@@ -10,6 +10,8 @@ import platform
 import sys
 import argparse
 from datetime import datetime
+from stable_baselines3.common.vec_env import VecNormalize
+
 
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -133,6 +135,21 @@ def make_vector_env(n_envs: int = 8, use_subproc: bool | None = None, heuristica
 def train_sac(model_path: str | None = None, total_timesteps: int = 10000, save_every: int | None = None, save_path: str | None = None, save_name: str | None = None, n_envs: int = 8, heuristica: str = "nao_holonomica", log_dir: str = None):
     env = make_vector_env(n_envs=n_envs, heuristica=heuristica, log_dir=log_dir)
 
+    # Define path for normalization stats based on the model path
+    if model_path:
+        vec_norm_path = model_path.replace(".zip", "") + "_vecnormalize.pkl"
+    else:
+        vec_norm_path = None
+
+    if model_path is not None and os.path.exists(model_path) and vec_norm_path and os.path.exists(vec_norm_path):
+        print(f"Carregando estatisticas de normalização de {vec_norm_path}")
+        env = VecNormalize.load(vec_norm_path, env) # Applied manually AFTER vectorization
+        env.training = True      # Continue updating running mean/std
+        env.norm_reward = False  # Do not normalize rewards
+    else:
+        print(f"Criando novas estatisticas de normalização (não encontrado em {vec_norm_path})")
+        env = VecNormalize(env, training=True, norm_reward=False)
+
     policy_kwargs = dict(
         activation_fn=torch.nn.ReLU,
         net_arch=dict(pi=[256, 128, 128], qf=[256, 128, 128])
@@ -172,8 +189,14 @@ def train_sac(model_path: str | None = None, total_timesteps: int = 10000, save_
             
             if save_path and save_name:
                 model_save_path = os.path.join(save_path, save_name)
+                # Construct unique path for this model's stats
+                vec_save_path = os.path.join(save_path, save_name + "_vecnormalize.pkl")
+                
+                #salvar modelo e estatisticas de normalização separadamente
                 model.save(model_save_path)
+                env.save(vec_save_path)
                 print(f"modelo salvo em {model_save_path}")
+                print(f"Estatisticas de normalização salvas em {vec_save_path}")
 
     return model
 

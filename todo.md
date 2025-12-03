@@ -4,9 +4,9 @@
 - [ ] checar hiperparametros se for o caso. 
 - [ ] avaliar uso de mixed-precision training
 - [X] implementar outras heuristicas (euclidiana, manhattan, etc.)
-- [ ] Usar normalização de heuristicas
+- [X] Usar normalização de heuristicas
 - [ ] análise comparativa entre heuristicas
-- [ ] considerar normalização de coordenadas privilegiadas
+- [X] considerar normalização de coordenadas privilegiadas
 - [X] mudar scripts de avaliação e treino para aceitar argumentos de linha de comando
 - [ ] elaborar notebook estruturado e bem documentado
 

@@ -369,13 +369,13 @@ class Vehicle():
 
     def get_tractor_state(self) -> np.ndarray:
         """retorna o estado do veículo como um array numpy, 
-        o estado é dado por: [x, y, theta, alpha] (radianos), onde:
+        o estado é dado por: [x, y, theta, beta] (radianos), onde:
         - x: posição x do veículo
         - y: posição y do veículo
         - theta: ângulo de orientação do veículo
-        - alpha: ângulo de esterçamento do veículo
+        - beta: ângulo de articulação do veículo
         """
-        return np.array([self.position_x_trator, self.position_y_trator, self.theta_trator, self.alpha_trator])
+        return np.array([self.position_x_trator, self.position_y_trator, self.get_tractor_theta(), self.get_tractor_beta()])
 
     def get_tractor_wheelbase(self) -> float:
         """retorna a distância entre eixos do trator"""

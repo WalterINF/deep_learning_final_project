@@ -2,6 +2,7 @@ import numpy as np
 import os
 import glob
 import random
+import argparse
 import gymnasium as gym
 from stable_baselines3 import SAC, PPO
 from src.ParkingEnv import ParkingEnv
@@ -10,7 +11,6 @@ import src.Visualization as Visualization
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_SAVE_DIR = os.path.join(SCRIPT_DIR, "models")
-MODEL_NAME = "SAC_Improved_V9"  # None para carregar o modelo mais recentemente atualizado, ou um nome específico como "SAC_Improved_V1"
 
 def get_latest_model(model_dir):
     """Encontra o arquivo .zip mais recentemente modificado no diretório de modelos."""
@@ -77,14 +77,23 @@ def record_video(model, video_name, num_episodes=1):
     print(f"Video saved to: {video_path}")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Evaluate a trained parking model.")
+    parser.add_argument(
+        "model_name",
+        nargs="?",
+        default=None,
+        help="Name of the model to load (without .zip extension). If not provided, loads the most recently updated model."
+    )
+    args = parser.parse_args()
+
     # Determina o caminho do modelo
-    if MODEL_NAME:
-        model_path = os.path.join(MODEL_SAVE_DIR, MODEL_NAME + ".zip")
+    if args.model_name:
+        model_path = os.path.join(MODEL_SAVE_DIR, args.model_name + ".zip")
         if not os.path.exists(model_path):
              # Tenta sem a extensão caso não encontre
-            model_path = os.path.join(MODEL_SAVE_DIR, MODEL_NAME)
+            model_path = os.path.join(MODEL_SAVE_DIR, args.model_name)
             if not os.path.exists(model_path):
-                print(f"Model {MODEL_NAME} not found in {MODEL_SAVE_DIR}")
+                print(f"Model {args.model_name} not found in {MODEL_SAVE_DIR}")
                 exit(1)
     else:
         model_path = get_latest_model(MODEL_SAVE_DIR)
@@ -94,19 +103,10 @@ if __name__ == "__main__":
     
     print(f"Loading model from: {model_path}")
     
-    # Load model - try SAC first, then PPO
-    try:
-        model = SAC.load(model_path)
-        print("Loaded SAC model.")
-    except Exception:
-        try:
-            model = PPO.load(model_path)
-            print("Loaded PPO model.")
-        except Exception as e:
-             print(f"Failed to load model as SAC or PPO. Error: {e}")
-             exit(1)
+    model = SAC.load(model_path)
+    print("Loaded SAC model.")
              
-    # Record one full episode
+    # grava episodio
     video_filename = os.path.basename(model_path).replace(".zip", "") + "_eval"
     record_video(model, video_filename, num_episodes=1)
     

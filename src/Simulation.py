@@ -15,23 +15,30 @@ class Simulation:
 
     def move_vehicle(self, velocity: float, alpha: float, dt: float):
         # Current state
-        x, y = self.vehicle.get_position()
-        theta = self.vehicle.get_theta()
+        x, y = self.vehicle.get_tractor_position()
+        theta = self.vehicle.get_tractor_theta()
+        beta = self.vehicle.get_tractor_beta()
 
-        # Geometry - wheelbase (distance between front and rear axles)
-        L = self.vehicle.get_wheelbase()
+        # Geometry
+        D = self.vehicle.get_distancia_eixo_dianteiro_quinta_roda() - self.vehicle.get_distancia_eixo_traseiro_quinta_roda()
+        L = self.vehicle.get_distancia_eixo_traseiro_trailer_quinta_roda()
+        a = self.vehicle.get_distancia_eixo_traseiro_quinta_roda()
 
-        # Kinematics (bicycle model)
+        angular_velocity_tractor = (velocity / D) * tan(alpha)
+
+        # Kinematics
         x_dot = velocity * cos(theta)
         y_dot = velocity * sin(theta)
-        theta_dot = (velocity / L) * tan(alpha)
+        theta_dot = (velocity / D) * tan(alpha)
+        beta_dot = angular_velocity_tractor * (1 - (a * cos(beta)) / L) - (velocity * sin(beta)) / L
 
         # Euler step
         new_x = x + x_dot * dt
         new_y = y + y_dot * dt
         new_theta = theta + theta_dot * dt
+        new_beta = beta + beta_dot * dt
 
-        self.vehicle.update_physical_properties(new_x, new_y, velocity, new_theta, alpha)
+        self.vehicle.update_physical_properties(new_x, new_y, velocity, new_theta, new_beta, alpha)
         self.vehicle.update_raycasts(self.map.get_entities())
 
 
@@ -218,68 +225,82 @@ class Vehicle():
 
     ## ============ propriedades do veículo ============
 
-    comprimento: float  # vehicle length
-    wheelbase: float    # distância entre-eixos
-    largura: float      # vehicle width
+    comprimento_trator: float  # comprimento do trator
+    distancia_eixo_traseiro_quinta_roda: float    # distância entre o eixo traseiro do trator e a quinta roda
+    distancia_eixo_dianteiro_quinta_roda: float    # distância entre o eixo dianteiro do trator e a quinta roda
+    distancia_frente_quinta_roda: float    # distância entre a dianteira do trator e a quinta roda
+    largura_trator: float      # largura do trator
+    comprimento_trailer: float  # comprimento do trailer
+    distancia_eixo_traseiro_trailer_quinta_roda: float    # distância entre o eixo traseiro do trailer e o pino-rei
+    distancia_frente_trailer_quinta_roda: float    # distância entre a dianteira do trailer e o pino-rei
+    largura_trailer: float      # largura do trailer
+    largura_roda: float      # largura da roda
+    comprimento_roda: float      # comprimento da roda
+    angulo_maximo_articulacao: float    # ângulo máximo de articulação
 
     ## ============ estado do veículo ============
 
-    position_x: float  # posição x do veículo
-    position_y: float  # posição y do veículo
-    theta: float       # ângulo de orientação do veículo
+    position_x_trator: float  # posição x do veículo
+    position_y_trator: float  # posição y do veículo
+    theta_trator: float       # ângulo de orientação do veículo
+    beta_trator: float       # ângulo de articulação do veículo
+    alpha_trator: float       # ângulo de esterçamento do veículo
     raycast_results: Dict[str, RaycastResult]
 
     ## lista de raycasts do veículo
     raycast_positions_and_angle_offsets = [
        # (nome,   origem,    ângulo de offset)
-        ("r1", "vehicle", 0.0), # 0 graus
-        ("r2", "vehicle", math.pi/4), # 45 graus
-        ("r3", "vehicle", math.pi/2), # 90 graus
-        ("r4", "vehicle", 3*math.pi/4), # 135 graus
-        ("r5", "vehicle", -3*math.pi/4), # -135 graus
-        ("r6", "vehicle", -math.pi/2), # -90 graus
-        ("r7", "vehicle", -math.pi/4), # -45 graus
+        ("r1", "tractor", 0.0), # 0 graus
+        ("r2", "tractor", math.pi/4), # 45 graus
+        ("r3", "tractor", math.pi/2), # 90 graus
+        ("r4", "tractor", 3*math.pi/4), # 135 graus
+        ("r5", "tractor", -3*math.pi/4), # -135 graus
+        ("r6", "tractor", -math.pi/2), # -90 graus
+        ("r7", "tractor", -math.pi/4), # -45 graus
     ]
 
 
-    MAX_RAYCAST_LENGTH = 50.0 # 20 metros
+    MAX_RAYCAST_LENGTH = 50.0 # 50 metros
 
     def __init__(self, geometry: dict):
         # Inicializa como uma entidade neutra; dimensões/posição podem ser ajustadas posteriormente
 
         # Parâmetros físicos do veículo
-        self.comprimento = float(geometry.get("comprimento", geometry.get("comprimento_trator", 0.0)))
-        self.largura = float(geometry.get("largura", geometry.get("largura_trator", 0.0)))
-        self.wheelbase = float(geometry.get("wheelbase", geometry.get("distancia_eixo_dianteiro_quinta_roda", 0.0)))
+        self.comprimento_trator = float(geometry.get("comprimento_trator", 0.0))
+        self.distancia_eixo_traseiro_quinta_roda = float(geometry.get("distancia_eixo_traseiro_quinta_roda", 0.0))
+        self.distancia_eixo_dianteiro_quinta_roda = float(geometry.get("distancia_eixo_dianteiro_quinta_roda", 0.0))
+        self.distancia_frente_quinta_roda = float(geometry.get("distancia_frente_quinta_roda", 0.0))
+        self.largura_trator = float(geometry.get("largura_trator", 0.0))
+        self.comprimento_trailer = float(geometry.get("comprimento_trailer", 0.0))
+        self.distancia_eixo_traseiro_trailer_quinta_roda = float(geometry.get("distancia_eixo_traseiro_trailer_quinta_roda", 0.0))
+        self.distancia_frente_trailer_quinta_roda = float(geometry.get("distancia_frente_trailer_quinta_roda", 0.0))
+        self.largura_trailer = float(geometry.get("largura_trailer", 0.0))
         self.largura_roda = float(geometry.get("largura_roda", 0.0))
         self.comprimento_roda = float(geometry.get("comprimento_roda", 0.0))
-        self.angulo_maximo_esterco = float(geometry.get("angulo_maximo_esterco", geometry.get("angulo_maximo_articulacao", 0.0)))
-
-        # Define largura/altura para o bounding box do veículo no mapa
-        self.width = self.largura
-        self.length = self.comprimento
+        self.angulo_maximo_articulacao = float(geometry.get("angulo_maximo_articulacao", 0.0))
 
         # Variáveis da simulação (mudam a cada passo)
-        self.position_x = 10.0
-        self.position_y = 10.0
-        self.velocity = 0.0
-        self.theta = 0.0
-        self.alpha = 0.0  # ângulo de esterçamento
-        self.raycast_results = {}
+        self.position_x_trator = 10.0 # posição x do veículo
+        self.position_y_trator = 10.0 # posição y do veículo
+        self.velocity_trator = 0.0 # velocidade do veículo
+        self.theta_trator = 0.0 # ângulo de orientação do veículo
+        self.beta_trator = 0.0 # ângulo de articulação do veículo
+        self.alpha_trator = 0.0  # ângulo de esterçamento do veículo
+        self.raycast_results = {} # resultados dos raycasts do veículo
         
-        self.initialize_raycasts()
+        self.initialize_raycasts() # inicializa os raycasts do veículo
 
     def initialize_raycasts(self):
         for raycast_name, origin_point, angle_offset in self.raycast_positions_and_angle_offsets:
             self.raycast_results[raycast_name] = RaycastResult(0.0, 0.0, 0.0, 0.0, None)
 
     def update_raycasts(self, entities: list[MapEntity]):
-        center_position = self.get_center_position()
-        vehicle_theta = self.get_theta()
+        center_position = self.get_tractor_center_position()
+        vehicle_theta = self.get_tractor_theta()
         
         for raycast_name, origin_point, angle_offset in self.raycast_positions_and_angle_offsets:
             # dispara os raycasts e armazena os resultados
-            if origin_point == "vehicle":
+            if origin_point == "tractor":
                 self.raycast_results[raycast_name] = fire_raycast(
                     center_position[0], 
                     center_position[1], 
@@ -290,64 +311,63 @@ class Vehicle():
     def get_raycast_results(self) -> Dict[str, RaycastResult]:
         return self.raycast_results
 
-    def get_center_position(self) -> tuple[float, float]:
-        return self.position_x + cos(self.theta) * self.get_comprimento()/2, self.position_y + sin(self.theta) * self.get_comprimento()/2
+    def get_tractor_center_position(self) -> tuple[float, float]:
+        """retorna a posição do centro do veículo"""
+        return self.get_tractor_position()[0] + math.cos(self.get_tractor_theta()) * self.get_tractor_length()/2, self.get_tractor_position()[1] + math.sin(self.get_tractor_theta()) * self.get_tractor_length()/2
 
     def get_raycast_count(self) -> int:
         return len(self.raycast_positions_and_angle_offsets)
 
-    def get_raycast_lengths_and_object_classes(self) -> tuple[list[float], list[int]]:
+    def get_raycast_lengths(self) -> list[float]:
         """
         Retorna um único array contendo, em ordem fixa e consistente:
-        [r1_len, r2_len, ..., rN_len, r1_class, r2_class, ..., rN_class]
+        [r1_len, r2_len, ..., rN_len]
 
         Onde:
         - r*_len é o comprimento do raycast correspondente.
-        - r*_class é a classe do objeto detectado (0: nada, 1: parede, 2: vaga, ...).
-
         A ordem é sempre a mesma, definida pela lista `raycast_positions_and_angle_offsets`.
         """
         raycast_lengths: list[float] = []
-        raycast_object_classes: list[int] = []
 
         # Garante ordem consistente percorrendo a lista de configuração,
-        # e não o dicionário (que poderia ter outra ordem).
         for raycast_name, _origin_point, _angle_offset in self.raycast_positions_and_angle_offsets:
             result = self.raycast_results[raycast_name]
 
             # Comprimento do raycast
             raycast_lengths.append(result.length)
 
-            # Classe do objeto atingido pelo raycast
-            if result.entity is None:
-                obj_class = MapEntity.ENTITY_NOTHING
-            else:
-                # Usa o tipo da entidade (já é um inteiro compatível com o espaço de observação)
-                obj_class = result.entity.type
+        return raycast_lengths
 
-            raycast_object_classes.append(obj_class)
+    # ===================== métodos para do o TRATOR =====================
 
-        return raycast_lengths, raycast_object_classes
+    def get_tractor_position(self) -> tuple[float, float]:
+        """retorna a posição do veículo (referencia eixo traseiro)"""
+        return self.position_x_trator, self.position_y_trator
 
-    def get_position(self) -> tuple[float, float]:
-        return self.position_x, self.position_y
+    def get_tractor_velocity(self) -> float:
+        """retorna a velocidade do veículo"""
+        return self.velocity_trator
 
-    def get_velocity(self) -> float:
-        return self.velocity
+    def get_tractor_theta(self) -> float:
+        """retorna o ângulo de orientação do veículo em relação ao eixo x do mapa"""
+        return self.theta_trator
 
-    def get_theta(self) -> float:
-        return self.theta
+    def get_tractor_alpha(self) -> float:
+        """retorna o ângulo de esterçamento do veículo"""
+        return self.alpha_trator
 
-    def get_alpha(self) -> float:
-        return self.alpha
+    def get_tractor_beta(self) -> float:
+        """retorna o ângulo de articulação do veículo"""
+        return self.beta_trator
 
-    def get_comprimento(self) -> float:
-        return self.comprimento
+    def get_tractor_length(self) -> float:
+        """retorna o comprimento do veículo"""
+        return self.comprimento_trator
 
-    def get_largura(self) -> float:
-        return self.largura
+    def get_tractor_width(self) -> float:
+        return self.largura_trator
 
-    def get_state(self) -> np.ndarray:
+    def get_tractor_state(self) -> np.ndarray:
         """retorna o estado do veículo como um array numpy, 
         o estado é dado por: [x, y, theta, alpha] (radianos), onde:
         - x: posição x do veículo
@@ -355,10 +375,127 @@ class Vehicle():
         - theta: ângulo de orientação do veículo
         - alpha: ângulo de esterçamento do veículo
         """
-        return np.array([self.position_x, self.position_y, self.theta, self.alpha])
+        return np.array([self.position_x_trator, self.position_y_trator, self.theta_trator, self.alpha_trator])
 
-    def get_wheelbase(self) -> float:
-        return self.wheelbase
+    def get_tractor_wheelbase(self) -> float:
+        """retorna a distância entre eixos do trator"""
+        return abs(self.distancia_eixo_dianteiro_quinta_roda - self.distancia_eixo_traseiro_quinta_roda)
+
+    def get_tractor_largura_roda(self) -> float:
+        """retorna a largura da roda do trator"""
+        return self.largura_roda
+
+    def get_distancia_eixo_traseiro_quinta_roda(self) -> float:
+        return self.distancia_eixo_traseiro_quinta_roda
+
+    def get_distancia_eixo_dianteiro_quinta_roda(self) -> float:
+        return self.distancia_eixo_dianteiro_quinta_roda
+
+    def get_distancia_frente_quinta_roda(self) -> float:
+        return self.distancia_frente_quinta_roda
+
+    def get_tractor_comprimento_roda(self) -> float:
+        """retorna o comprimento da roda do trator"""
+        return self.comprimento_roda
+
+    def get_tractor_bounding_box(self) -> BoundingBox:
+        """
+        Retorna a BoundingBox do trator. A referência (x, y) é o eixo traseiro do trator;
+        assumimos comprimento do trator medido de traseira (próximo ao eixo traseiro) até a frente.
+        O centro geométrico do retângulo está a meio comprimento à frente do eixo traseiro.
+        """
+        cx = self.position_x_trator + (self.get_tractor_length() / 2.0) * math.cos(self.theta_trator)
+        cy = self.position_y_trator + (self.get_tractor_length() / 2.0) * math.sin(self.theta_trator)
+        return BoundingBox(cx, cy, self.get_tractor_length(), self.get_tractor_width(), self.theta_trator)
+
+    def get_tractor_front_axle_position(self) -> tuple[float, float]:
+        """Retorna o ponto médio entre as rodas dianteiras do veículo (centro do eixo dianteiro)"""
+        front_axle_center_x = self.position_x_trator + self.get_tractor_wheelbase() * math.cos(self.theta_trator)
+        front_axle_center_y = self.position_y_trator + self.get_tractor_wheelbase() * math.sin(self.theta_trator)
+        return front_axle_center_x, front_axle_center_y
+    
+    def get_tractor_rear_axle_position(self) -> tuple[float, float]:
+        """Retorna o ponto médio entre as rodas traseiras do veículo (centro do eixo traseiro)
+        O sistema de referência coloca a origem (position_x, position_y) no eixo traseiro."""
+        return self.position_x_trator, self.position_y_trator
+
+    def set_tractor_theta(self, new_theta_trator: float):
+        """atualiza o ângulo de orientação do veículo fazendo clipping para o intervalo [-pi, pi]"""
+        self.theta_trator = new_theta_trator
+
+    # ===================== métodos para do o TRAILER =====================
+
+    def get_trailer_rear_axle_position(self) -> tuple[float, float]:
+        """
+        Retorna o ponto médio entre as rodas traseiras do trailer (centro do eixo traseiro).
+        Calculado a partir da posição da quinta roda e da orientação do trailer.
+        """
+        # Posição do ponto de articulação (quinta roda) no sistema global
+        joint_x = self.position_x_trator + self.distancia_eixo_traseiro_quinta_roda * math.cos(self.theta_trator)
+        joint_y = self.position_y_trator + self.distancia_eixo_traseiro_quinta_roda * math.sin(self.theta_trator)
+
+        # Orientação do trailer
+        theta_trailer = self.theta_trator - self.beta_trator
+
+        # Centro do eixo traseiro do trailer fica a uma distância
+        # 'distancia_eixo_traseiro_trailer_quinta_roda' atrás da quinta roda ao longo do trailer
+        rear_axle_x = joint_x - self.distancia_eixo_traseiro_trailer_quinta_roda * math.cos(theta_trailer)
+        rear_axle_y = joint_y - self.distancia_eixo_traseiro_trailer_quinta_roda * math.sin(theta_trailer)
+
+        return rear_axle_x, rear_axle_y
+
+    def get_bounding_box_trailer(self) -> BoundingBox:
+        """
+        Retorna a BoundingBox do trailer. A posição do trailer é derivada do trator:
+        - Ponto de articulação (quinta roda) fica a 'distancia_eixo_traseiro_quinta_roda' à frente do eixo traseiro do trator.
+        - Orientação do trailer θ2 = θ1 - β (β = θ1 - θ2).
+        - Centro do trailer fica deslocado do pino de engate por (comprimento/2 - distancia_frente_trailer_quinta_roda)
+        ao longo do eixo do trailer em direção à traseira.
+        """
+        trailer_center_x, trailer_center_y = self.get_trailer_position()
+
+        # width = comprimento (longitudinal, local x), height = largura (lateral, local y)
+        return BoundingBox(trailer_center_x, trailer_center_y, self.comprimento_trailer, self.largura_trailer, self.get_trailer_theta())
+
+    def get_trailer_theta(self) -> float:
+        """
+        Retorna o ângulo global do trailer (θ_trailer) em relação ao eixo x.
+        Pela definição de β (ângulo entre trator e trailer): β = θ_trator - θ_trailer
+        Logo: θ_trailer = θ_trator - β
+        """
+        return self.theta_trator - self.beta_trator
+
+    def get_comprimento_trailer(self) -> float:
+        return self.comprimento_trailer
+
+    def get_trailer_position(self) -> tuple[float, float]:
+        """Retorna a posição absoluta do ponto central do trailer"""
+        # Posição do ponto de articulação (quinta roda) no global
+        joint_x = self.position_x_trator + self.distancia_eixo_traseiro_quinta_roda * math.cos(self.theta_trator)
+        joint_y = self.position_y_trator + self.distancia_eixo_traseiro_quinta_roda * math.sin(self.theta_trator)
+        
+        # Orientação do trailer
+        theta_trailer = self.theta_trator - self.beta_trator
+        
+        # Deslocamento do centro do trailer a partir da quinta roda
+        # O centro fica deslocado por (comprimento/2 - distancia_frente_trailer_quinta_roda)
+        # ao longo do eixo do trailer em direção à traseira
+        offset_from_joint = (self.comprimento_trailer / 2.0) - self.distancia_frente_trailer_quinta_roda
+        
+        # Centro do trailer (deslocado do joint em direção à traseira)
+        center_x = joint_x - offset_from_joint * math.cos(theta_trailer)
+        center_y = joint_y - offset_from_joint * math.sin(theta_trailer)
+        
+        return center_x, center_y
+
+    def get_distancia_eixo_traseiro_trailer_quinta_roda(self) -> float:
+        return self.distancia_eixo_traseiro_trailer_quinta_roda
+
+    def get_distancia_frente_trailer_quinta_roda(self) -> float:
+        return self.distancia_frente_trailer_quinta_roda
+
+    def get_largura_trailer(self) -> float:
+        return self.largura_trailer
 
     def get_largura_roda(self) -> float:
         return self.largura_roda
@@ -366,68 +503,35 @@ class Vehicle():
     def get_comprimento_roda(self) -> float:
         return self.comprimento_roda
 
-    def get_angulo_maximo_esterco(self) -> float:
-        return self.angulo_maximo_esterco
+
+
+
+
+
+    # ===================== métodos para AMBOS (trator e trailer) =====================
 
     def update_physical_properties(self, 
-                                    position_x: float, 
-                                    position_y: float, 
-                                    velocity: float,
-                                    theta: float,
-                                    alpha: float):
-        self.position_x = position_x
-        self.position_y = position_y
-        self.velocity = velocity
-        self.set_theta(theta)
-        self.alpha = alpha
+                                    position_x_trator: float, 
+                                    position_y_trator: float, 
+                                    velocity_trator: float,
+                                    theta_trator: float,
+                                    beta_trator: float,
+                                    alpha_trator: float):
+        self.position_x_trator = position_x_trator
+        self.position_y_trator = position_y_trator
+        self.velocity_trator = velocity_trator
+        self.set_tractor_theta(theta_trator)
+        self.beta_trator = beta_trator
+        self.alpha_trator = alpha_trator
 
-    def set_theta(self, new_theta: float):
-        """atualiza o ângulo de orientação do veículo fazendo clipping para o intervalo [-pi, pi]"""
-        if new_theta > math.pi:
-            self.theta = new_theta - 2 * math.pi
-        elif new_theta < -math.pi:
-            self.theta = new_theta + 2 * math.pi
-        else:
-            self.theta = new_theta
-
-    def get_bounding_box(self) -> BoundingBox:
-        """
-        Retorna a BoundingBox do veículo. A referência (x, y) é o eixo traseiro do veículo;
-        assumimos comprimento do veículo medido de traseira (próximo ao eixo traseiro) até a frente.
-        O centro geométrico do retângulo está a meio comprimento à frente do eixo traseiro.
-        """
-        cx = self.position_x + (self.comprimento / 2.0) * math.cos(self.theta)
-        cy = self.position_y + (self.comprimento / 2.0) * math.sin(self.theta)
-        # width = comprimento (longitudinal, local x), height = largura (lateral, local y)
-        return BoundingBox(cx, cy, self.comprimento, self.largura, self.theta)
-
-
-
-    def get_perpendicular_to_theta(self) -> float:
-        """
-        Retorna o ângulo perpendicular ao ângulo de orientação do veículo.
-        """
-        return self.theta + math.pi / 2
-    
-    def get_front_axle_position(self) -> tuple[float, float]:
-        """Retorna o ponto médio entre as rodas dianteiras do veículo (centro do eixo dianteiro)"""
-        front_axle_center_x = self.position_x + self.wheelbase * math.cos(self.theta)
-        front_axle_center_y = self.position_y + self.wheelbase * math.sin(self.theta)
-        return front_axle_center_x, front_axle_center_y
-    
-    def get_rear_axle_position(self) -> tuple[float, float]:
-        """Retorna o ponto médio entre as rodas traseiras do veículo (centro do eixo traseiro)
-        O sistema de referência coloca a origem (position_x, position_y) no eixo traseiro."""
-        return self.position_x, self.position_y
-    
     def get_wheels_bounding_boxes(self) -> list[BoundingBox]:
         """Retorna as bounding boxes dos pneus do veículo"""
-        front_axle_center_x, front_axle_center_y = self.get_front_axle_position()
-        rear_axle_center_x, rear_axle_center_y = self.get_rear_axle_position()
+        front_axle_center_x, front_axle_center_y = self.get_tractor_front_axle_position()
+        rear_axle_center_x, rear_axle_center_y = self.get_tractor_rear_axle_position()
 
         # Lateral offsets (half the vehicle width) perpendicular to the heading
-        half_width = self.largura / 2.0
-        perpendicular_angle = self.theta + math.pi / 2.0
+        half_width = self.get_tractor_width() / 2.0
+        perpendicular_angle = self.get_tractor_theta() + math.pi / 2.0
 
         front_left_wheel_x = front_axle_center_x + half_width * math.cos(perpendicular_angle)
         front_left_wheel_y = front_axle_center_y + half_width * math.sin(perpendicular_angle)
@@ -440,16 +544,16 @@ class Vehicle():
         rear_right_wheel_y = rear_axle_center_y - half_width * math.sin(perpendicular_angle)
 
         return [
-            BoundingBox(front_left_wheel_x, front_left_wheel_y, self.comprimento_roda, self.largura_roda, self.theta + self.alpha),
-            BoundingBox(front_right_wheel_x, front_right_wheel_y, self.comprimento_roda, self.largura_roda, self.theta + self.alpha),
-            BoundingBox(rear_left_wheel_x, rear_left_wheel_y, self.comprimento_roda, self.largura_roda, self.theta),
-            BoundingBox(rear_right_wheel_x, rear_right_wheel_y, self.comprimento_roda, self.largura_roda, self.theta),
+            BoundingBox(front_left_wheel_x, front_left_wheel_y, self.get_tractor_comprimento_roda(), self.get_tractor_largura_roda(), self.get_tractor_theta() + self.alpha_trator),
+            BoundingBox(front_right_wheel_x, front_right_wheel_y, self.get_tractor_comprimento_roda(), self.get_tractor_largura_roda(), self.get_tractor_theta() + self.alpha_trator),
+            BoundingBox(rear_left_wheel_x, rear_left_wheel_y, self.get_tractor_comprimento_roda(), self.get_tractor_largura_roda(), self.get_tractor_theta()),
+            BoundingBox(rear_right_wheel_x, rear_right_wheel_y, self.get_tractor_comprimento_roda(), self.get_tractor_largura_roda(), self.get_tractor_theta()),
         ]
 
     def check_collision(self, entity: MapEntity) -> bool:
         """Verifica se o veículo colidiu com uma entidade."""
         target_bbox = entity.get_bounding_box()
-        return self.get_bounding_box().check_collision(target_bbox)
+        return self.get_tractor_bounding_box().check_collision(target_bbox) or self.get_bounding_box_trailer().check_collision(target_bbox)
  
 
 class Map:
@@ -517,7 +621,7 @@ class Map:
         start_theta = start_pos.theta
         start_x = start_pos.position_x + 2.0 * math.cos(start_theta)
         start_y = start_pos.position_y + 2.0 * math.sin(start_theta)
-        vehicle.update_physical_properties(start_x, start_y, 0.0, start_theta, 0.0)
+        vehicle.update_physical_properties(start_x, start_y, 0.0, start_theta, 0.0, 0.0)
         vehicle.initialize_raycasts()
         vehicle.update_raycasts(self.entities)
 

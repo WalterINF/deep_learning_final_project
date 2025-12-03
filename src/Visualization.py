@@ -137,11 +137,18 @@ def to_rgb_array(
     # Desenha o veículo
     if simulation.vehicle is not None:
         # Tractor
-        tractor_bbox = simulation.vehicle.get_bounding_box()
+        tractor_bbox = simulation.vehicle.get_tractor_bounding_box()
         tractor_corners = tractor_bbox.get_corners()
         tractor_scaled = [(x * scale_x, y * scale_y) for (x, y) in tractor_corners]
         gfxdraw.aapolygon(surface, tractor_scaled, (128, 128, 255)) ## azul claro
         gfxdraw.filled_polygon(surface, tractor_scaled, (128, 128, 255)) ## azul claro
+
+        # Trailer
+        trailer_bbox = simulation.vehicle.get_bounding_box_trailer()
+        trailer_corners = trailer_bbox.get_corners()
+        trailer_scaled = [(x * scale_x, y * scale_y) for (x, y) in trailer_corners]
+        gfxdraw.aapolygon(surface, trailer_scaled, (0, 200, 0)) ## verde
+        gfxdraw.filled_polygon(surface, trailer_scaled, (0, 200, 0)) ## verde
 
         # Desenha os raycasts com círculos nas pontas
 
@@ -178,13 +185,13 @@ def to_rgb_array(
             )
 
         # desenha ações na tela
-        if simulation.vehicle.get_velocity() is not None:
-            velocity_text = f"Velocity: {simulation.vehicle.get_velocity():.2f}"
+        if simulation.vehicle.get_tractor_velocity() is not None:
+            velocity_text = f"Velocity: {simulation.vehicle.get_tractor_velocity():.2f}"
             velocity_surface = font.render(velocity_text, True, (0, 0, 0))
             surface.blit(velocity_surface, (10, 10))
 
-        if simulation.vehicle.get_alpha() is not None:
-            alpha_text = f"Alpha: {simulation.vehicle.get_alpha():.2f}"
+        if simulation.vehicle.get_tractor_alpha() is not None:
+            alpha_text = f"Alpha: {simulation.vehicle.get_tractor_alpha():.2f}"
             alpha_surface = font.render(alpha_text, True, (0, 0, 0))
             surface.blit(alpha_surface, (10, 30))
 
@@ -217,7 +224,7 @@ def to_rgb_array(
 
 
         #desenha distancia do objetivo
-        vehicle_position = simulation.vehicle.get_position()
+        vehicle_position = simulation.vehicle.get_tractor_position()
         vehicle_position_scaled = (vehicle_position[0] * scale_x, vehicle_position[1] * scale_y)
         goal_position = simulation.map.get_parking_goal_position()
         goal_position_scaled = (goal_position[0] * scale_x, goal_position[1] * scale_y)

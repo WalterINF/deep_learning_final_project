@@ -20,8 +20,9 @@ class ParkingEnv(gym.Env):
     DT = 0.2 # tempo do passo de simulação
     MAX_SECONDS = 90.0
     MAX_STEPS = int(MAX_SECONDS / DT)
-    VEHICLE_PARKED_THRESHOLD_M = 1.0 # distancia minima entre centro do veículo e centro da vaga para considerar o veículo estacionado
-    VEHICLE_PARKED_THRESHOLD_ANGLE = float(np.deg2rad(5.0)) # angulo maximo de desalinhamento para considerar o veículo estacionado
+    VEHICLE_PARKED_THRESHOLD_M = 2.0 # distancia minima entre centro do TRAILER e centro da vaga para considerar o veículo estacionado
+    VEHICLE_PARKED_THRESHOLD_ANGLE = float(np.deg2rad(5.0)) # angulo maximo de desalinhamento do TRAILER para considerar o veículo estacionado
+    JACKKNIFE_LIMIT_RAD = float(np.deg2rad(45.0)) # angulo maximo de desalinhamento do TRAILER para considerar o veículo em jackknife (45 graus)
 
     ## recompensas
     REWARD_GOAL = 100.0 # recompensa por chegar ao objetivo 
@@ -52,9 +53,8 @@ class ParkingEnv(gym.Env):
 
         self.simulation = self.simulation_loader.load_simulation()
 
-        self.kinematic_car_params = KinematicCarParams(
-            wheelbase=self.simulation.vehicle.get_wheelbase()
-        )
+        self.tractor_trailer_params = TractorTrailerParams()
+        self.tractor_trailer_geometry = TractorTrailerGeometry(params=self.tractor_trailer_params)
 
         self.steps = 0
         self.total_reward = 0.0
@@ -76,9 +76,9 @@ class ParkingEnv(gym.Env):
         obs_low = np.array(
             [
                 -150.0,         
-                -self.STEERING_LIMIT_RAD,                         
-                -math.pi,          
-                -500.0,  
+                -150.0,                         
+                -150.0,          
+                -150.0,  
             ]
             + [0.0] * self.simulation.vehicle.get_raycast_count(),
             dtype=np.float32,
@@ -87,11 +87,11 @@ class ParkingEnv(gym.Env):
         obs_high = np.array(
             [
                 150.0,         
-                self.STEERING_LIMIT_RAD,       
-                math.pi,         
-                500.0,  
+                150.0,       
+                150.0,         
+                150.0,  
             ]
-            + [0.0] * self.simulation.vehicle.get_raycast_count(),
+            + [50.0] * self.simulation.vehicle.get_raycast_count(),
             dtype=np.float32,
         )
 
@@ -134,24 +134,22 @@ class ParkingEnv(gym.Env):
 
     def _build_observation(self) -> np.ndarray:
 
-        vehicle_state = self.simulation.vehicle.get_state()
+        tractor_state = self.simulation.vehicle.get_tractor_state()
         desired_state = [
             self.simulation.map.get_parking_goal_position()[0], 
             self.simulation.map.get_parking_goal_position()[1], 
             self.simulation.map.get_parking_goal_theta(),
             0.0] # phi_d = 0
 
-        privileged_coordinates = compute_privileged_coordinates(
-            state=vehicle_state,
+        privileged_coordinates = self.tractor_trailer_geometry.privileged_coords(
+            state=tractor_state,
             goal=desired_state,
-            params=self.kinematic_car_params
         )
-        k_vector = privileged_coordinates.z
 
-        raw_lengths, _ = self.simulation.vehicle.get_raycast_lengths_and_object_classes()
+        raw_lengths = self.simulation.vehicle.get_raycast_lengths()
         normalized_lengths = [length / self.SENSOR_RANGE_M for length in raw_lengths]
 
-        return np.concatenate((k_vector, normalized_lengths))
+        return np.concatenate((privileged_coordinates, normalized_lengths))
     
     def _normalize_angle(self, angle: float) -> float:
         """Normaliza um ângulo para o intervalo [-pi, pi]"""
@@ -175,6 +173,9 @@ class ParkingEnv(gym.Env):
         # verificação de terminação
         if self.steps >= self.MAX_STEPS:
             truncated = True
+        elif self._check_vehicle_jackknife():
+            terminated = True
+            reward = self.PUNISHMENT_JACKKNIFE
         elif self._check_vehicle_parking():
             terminated = True
             reward = self.REWARD_GOAL
@@ -215,13 +216,17 @@ class ParkingEnv(gym.Env):
         if heuristic == "nao_holonomica":
             return self._calculate_nao_holonomic_distance()
         elif heuristic == "euclidiana":
-            return self._calculate_distance_euclidean(self.simulation.vehicle.get_position(), self.simulation.map.get_parking_goal_position())
+            return self._calculate_distance_euclidean(self.simulation.vehicle.get_tractor_position(), self.simulation.map.get_parking_goal_position())
         elif heuristic == "manhattan":
-            return self._calculate_distance_manhattan(self.simulation.vehicle.get_position(), self.simulation.map.get_parking_goal_position())
+            return self._calculate_distance_manhattan(self.simulation.vehicle.get_tractor_position(), self.simulation.map.get_parking_goal_position())
         elif heuristic == "nenhuma":
             return 0.0
         else:
             raise ValueError(f"Heurística inválida: {heuristic}")
+
+    def _check_vehicle_jackknife(self) -> bool:
+        """Verifica se o veículo está em jackknife."""
+        return abs(self.simulation.vehicle.get_tractor_beta()) > self.JACKKNIFE_LIMIT_RAD
 
 
     def _check_vehicle_collision(self) -> bool:
@@ -263,20 +268,26 @@ class ParkingEnv(gym.Env):
         return angle_diff
 
     def _calculate_nao_holonomic_distance(self):
-        position_car_x, position_car_y = self.simulation.vehicle.get_position()
-        car_theta = self.simulation.vehicle.get_theta()
-        position_goal_x, position_goal_y = self.simulation.map.get_parking_goal_position()
-        goal_theta = self.simulation.map.get_parking_goal_theta()
-
-        return calcular_distancia_nao_holonomica_carro(
-            estado_atual=[position_car_x,position_car_y,car_theta],
-            estado_alvo=[position_goal_x, position_goal_y, goal_theta],
-            l_carro=self.simulation.vehicle.get_wheelbase()
+        goal_state = [
+            self.simulation.map.get_parking_goal_position()[0], 
+            self.simulation.map.get_parking_goal_position()[1], 
+            self.simulation.map.get_parking_goal_theta(), 
+            0.0] # phi_d = 0
+        
+        tractor_state = self.simulation.vehicle.get_tractor_state()
+        return self.tractor_trailer_geometry.homogeneous_distance(
+            state=tractor_state,
+            goal=goal_state,
         )
+        
+
 
     def _check_vehicle_parking(self) -> bool:
         """Verifica se o veículo está dentro de uma vaga de estacionamento no ângulo correto."""
-        return self._calculate_distance_euclidean(self.simulation.vehicle.get_position(), self.simulation.map.get_parking_goal_position()) < self.VEHICLE_PARKED_THRESHOLD_M and self.menor_diferenca_entre_angulos(self.simulation.vehicle.get_theta(), self.simulation.map.get_parking_goal_theta(), usarDirecao=False) < self.VEHICLE_PARKED_THRESHOLD_ANGLE
+        return (
+            self._calculate_distance_euclidean(self.simulation.vehicle.get_trailer_position(), self.simulation.map.get_parking_goal_position()) < self.VEHICLE_PARKED_THRESHOLD_M 
+            and self.menor_diferenca_entre_angulos(self.simulation.vehicle.get_trailer_theta() - math.pi, self.simulation.map.get_parking_goal_theta(), usarDirecao=False) < self.VEHICLE_PARKED_THRESHOLD_ANGLE
+        )
 
     def menor_diferenca_entre_angulos(self, angulo1: float, angulo2: float, usarDirecao: bool = False) -> float:
         """
@@ -341,165 +352,258 @@ class ParkingEnv(gym.Env):
 # Baseado em: "MPC for Non-Holonomic Vehicles Beyond Differential-Drive"
 
 @dataclass
-class KinematicCarParams:
+class TractorTrailerParams:
     """
-    Parâmetros do carro cinemático.
-    
-    :param wheelbase: Distância entre eixos (l) em metros
-    :type wheelbase: float
-    
-    :param state_weights: Pesos para estados (q1, q2, q3, q4)
-    :type state_weights: Tuple[float, float, float, float]
-    
-    :param input_weights: Pesos para entradas (r1, r2)
-    :type input_weights: Tuple[float, float]
+    Parâmetros geométricos do modelo trator-reboque.
+
+    :param D: Distância do eixo traseiro ao ponto de articulação. (wheelbase do trator)
+    :param L: Comprimento do reboque até a quinta roda
+    :param epsilon: Parâmetro geométrico relacionado à posição do eixo de articulação.
     """
-    wheelbase: float = 0.2
-    state_weights: Tuple[float, float, float, float] = (1.0, 1.0, 2.0, 3.0)
-    input_weights: Tuple[float, float] = (1.0, 1.0)
+    D: float = 4.7
+    L: float = 6.53
+    epsilon: float = 0.736 #nosso caso - negativo
 
 
-class PrivilegedCoordinates(NamedTuple):
+class TractorTrailerGeometry:
     """
-    Resultado do cálculo das coordenadas privilegiadas.
-    
-    :param z: Vetor de coordenadas privilegiadas [z1, z2, z3, z4]
-    :type z: np.ndarray
-    
-    :param weights: Pesos homogêneos w = (w1, w2, w3, w4)
-    :type weights: Tuple[int, int, int, int]
-    
-    :param r: Parâmetros de homogeneidade r = (r1, r2, r3, r4)
-    :type r: Tuple[int, int, int, int]
-    """
-    z: np.ndarray
-    weights: Tuple[int, int, int, int]
-    r: Tuple[int, int, int, int]
+    Geometria e métricas homogêneas para um modelo cinemático trator-reboque.
 
+    Esta classe implementa:
 
-def compute_privileged_coordinates(
-    state: np.ndarray,
-    goal: np.ndarray,
-    params: KinematicCarParams
-) -> PrivilegedCoordinates:
-    """
-    Calcula as coordenadas privilegiadas z do estado atual em relação ao goal.
-    
-    Para o carro cinemático, as coordenadas privilegiadas são obtidas através
-    do algoritmo de Bellaïche, que transforma o espaço de estados original
-    em um sistema de coordenadas que preserva a controlabilidade do sistema
-    não holonômico.
-    
-    **Transformação (Passo 1 - Bellaïche):**
-    
+    * Cálculo do erro entre ``state`` e ``goal`` no referencial do alvo.
+    * Transformação desse erro em coordenadas privilegiadas.
+    * Cálculo da distância homogênea (custo de estado) usando pesos não-holonômicos.
+
+    Convenção de estado
+    --------------------
+
+    O estado é dado por:
+
     .. math::
-    
-        y = A^{-T}(x - d)
-    
-    onde :math:`A` é a matriz formada pelos campos vetoriais avaliados no setpoint.
-    
-    Para o carro cinemático na origem (:math:`d = 0`):
-    
+
+        x = [x, y, \\theta, \\beta]^T
+
+    onde:
+
+    * ``x``: posição longitudinal no mundo
+    * ``y``: posição lateral no mundo
+    * ``theta``: orientação do trator
+    * ``beta``: ângulo de articulação (reboque/trator)
+
+    As entradas (não usadas diretamente aqui) seriam tipicamente:
+
     .. math::
-    
-        y = \\begin{bmatrix} x_1 \\\\ x_4 \\\\ -l \\cdot x_3 \\\\ l \\cdot x_2 \\end{bmatrix}
-    
-    **Parâmetros de Homogeneidade:**
-    
-    - Pesos: :math:`w = (1, 1, 2, 3)`
-    - Parâmetros r: :math:`r = (1, 1, 2, 3)`
-    - Grau de não holonomia: :math:`\\rho = 3`
-    
-    :param state: Estado atual do veículo [x, y, θ, φ]
-    :type state: np.ndarray
-    
-    :param goal: Estado desejado (setpoint) [x_d, y_d, θ_d, φ_d]
-    :type goal: np.ndarray
-    
-    :param params: Parâmetros do carro cinemático
-    :type params: KinematicCarParams
-    
-    :returns: Coordenadas privilegiadas e parâmetros de homogeneidade
-    :rtype: PrivilegedCoordinates
-    
-    :raises ValueError: Se state ou goal não tiverem dimensão 4
-    
-    .. note::
-    
-        Para setpoints com :math:`\\phi_d = 0`, vale :math:`z = y`.
-        Para setpoints gerais, o segundo passo do algoritmo de Bellaïche
-        é necessário.
-    
-    **Exemplo de uso:**
-    
-    .. code-block:: python
-    
-        params = KinematicCarParams(wheelbase=0.2)
-        state = np.array([0.5, 0.3, 0.1, 0.05])
-        goal = np.array([0.0, 0.0, 0.0, 0.0])
-        
-        result = compute_privileged_coordinates(state, goal, params)
-        print(f"z = {result.z}")
-        print(f"Pesos w = {result.weights}")
-    
-    **Referências:**
-    
-    .. [1] Rosenfelder et al. "MPC for Non-Holonomic Vehicles Beyond 
-           Differential-Drive", arXiv:2205.11400, 2022.
-    .. [2] Jean, F. "Control of Nonholonomic Systems: From Sub-Riemannian
-           Geometry to Motion Planning", Springer, 2014.
+
+        u = [v, \\alpha]^T
+
+    com ``v`` velocidade e ``alpha`` ângulo de direção.
     """
-    if len(state) != 4 or len(goal) != 4:
-        raise ValueError("State e goal devem ter dimensão 4: [x, y, θ, φ]")
-    
-    state = np.asarray(state, dtype=float)
-    goal = np.asarray(goal, dtype=float)
-    l = params.wheelbase
-    
-    # Diferença do estado em relação ao goal
-    dx = state - goal
-    x1, x2, x3, x4 = dx[0], dx[1], dx[2], dx[3]
-    
-    # =========================================================================
-    # Passo 1: Transformação de Bellaïche (Eq. 18 do paper)
-    # =========================================================================
-    # Matriz do referencial adaptado avaliado na origem:
-    # [X1, X2, X3, X4]_0 forma a base do espaço tangente
-    #
-    # Para o carro cinemático com setpoint na origem:
-    # y = [x1, x4, -l*x3, l*x2]^T
-    # =========================================================================
-    
-    y = np.array([
-        x1,           # y1 = x1 (direção facilmente controlável)
-        x4,           # y2 = φ (ângulo de esterçamento)
-        -l * x3,      # y3 = -l*θ (orientação escalada)
-        l * x2        # y4 = l*y (direção mais difícil de controlar)
-    ])
-    
-    # =========================================================================
-    # Passo 2: Correções polinomiais (Eq. 8 do paper)
-    # =========================================================================
-    # Para setpoints com φ_d = 0 (goal[3] = 0), as derivadas não holonômicas
-    # relevantes desaparecem, resultando em z = y.
-    #
-    # Para setpoints gerais, seria necessário calcular h_{4,2}(y1, y2, y3)
-    # =========================================================================
-    
-    if np.abs(goal[3]) < 1e-10:
-        # Caso simplificado: z = y
-        z = y.copy()
-    else:
-        # Caso geral: aplicar segundo passo de Bellaïche
-        # z_j = y_j - sum_{k=2}^{w_j-1} h_{j,k}(y)
-        # Para o carro, apenas z4 requer correção
-        z = y.copy()
-        # h_{4,2} envolve derivadas não holonômicas de ordem superior
-        # Implementação completa requer cálculo simbólico adicional
-        # Por simplicidade, mantemos z = y (aproximação válida próximo à origem)
-    
-    # Parâmetros de homogeneidade do carro cinemático
-    weights = (1, 1, 2, 3)  # w = (w1, w2, w3, w4)
-    r = (1, 1, 2, 3)        # r = (r1, r2, r3, r4)
-    
-    return PrivilegedCoordinates(z=z, weights=weights, r=r)
+
+    def __init__(self, params: TractorTrailerParams | None = None):
+        self.params = params or TractorTrailerParams()
+        # Pesos não-holonômicos dos estados (ordem de crescimento)
+        # r1 = 1, r2 = 1, r3 = 2, r4 = 3 (exemplo típico)
+        self.r: Tuple[int, int, int, int] = (1, 1, 2, 3)
+        # Grau de homogeneidade do pseudo-norma (escolha padrão: d = 2 * sum(r))
+        self.d: int = 2 * sum(self.r)
+
+    # ------------------------------------------------------------------
+    # 1. Erro no referencial do alvo
+    # ------------------------------------------------------------------
+    def _relative_error(self, state: np.ndarray, goal: np.ndarray) -> Tuple[float, float, float, float]:
+        """
+        Calcula o erro entre ``state`` e ``goal`` no frame do alvo.
+
+        Parameters
+        ----------
+        state : np.ndarray
+            Estado atual, ``[x, y, theta, beta]``.
+        goal : np.ndarray
+            Estado alvo, ``[x_g, y_g, theta_g, beta_g]``.
+
+        Returns
+        -------
+        (x_rel, y_rel, theta_rel, beta_rel) : tuple of float
+            Erros nas coordenadas do frame do alvo.
+
+        Notas
+        -----
+        1. Transladamos o estado atual para o sistema com origem no goal:
+
+           .. math::
+
+               \\Delta x = x - x_g, \\quad \\Delta y = y - y_g
+
+        2. Rotacionamos (\\Delta x, \\Delta y) pelo ângulo do alvo
+           para obter o erro no frame do alvo:
+
+           .. math::
+
+               \\begin{bmatrix}
+                   x_\\text{rel} \\\\
+                   y_\\text{rel}
+               \\end{bmatrix}
+               =
+               R(-\\theta_g)
+               \\begin{bmatrix}
+                   \\Delta x \\\\
+                   \\Delta y
+               \\end{bmatrix}
+
+        3. Os erros de orientação e articulação são:
+
+           .. math::
+
+               \\theta_\\text{rel} = \\theta - \\theta_g, \\quad
+               \\beta_\\text{rel} = \\beta - \\beta_g
+        """
+        x, y, th, be = state
+        xg, yg, thg, beg = goal
+
+        dx = x - xg
+        dy = y - yg
+        c = float(np.cos(thg))
+        s = float(np.sin(thg))
+
+        # Rotação para o frame do alvo
+        x_rel = c * dx + s * dy
+        y_rel = -s * dx + c * dy
+
+        th_rel = th - thg
+        be_rel = be - beg
+
+        return float(x_rel), float(y_rel), float(th_rel), float(be_rel)
+
+    # ------------------------------------------------------------------
+    # 2. Coordenadas privilegiadas z(state, goal)
+    # ------------------------------------------------------------------
+    def privileged_coords(self, state: np.ndarray, goal: np.ndarray) -> np.ndarray:
+        """
+        Calcula as coordenadas privilegiadas do erro entre dois estados.
+
+        Parameters
+        ----------
+        state : np.ndarray
+            Estado atual, ``[x, y, theta, beta]``.
+        goal : np.ndarray
+            Estado alvo, ``[x_g, y_g, theta_g, beta_g]``.
+
+        Returns
+        -------
+        z : np.ndarray
+            Vetor de coordenadas privilegiadas ``[z1, z2, z3, z4]``.
+
+        Conceito
+        --------
+        As coordenadas privilegiadas são um sistema de coordenadas
+        adaptado à estrutura não-holonômica do sistema. Para o modelo
+        trator-reboque simples, usamos uma forma inspirada na literatura
+        e em exemplos de carros não-holonômicos:
+
+        1. Primeiro calculamos o erro relativo:
+
+           .. math::
+
+               (x_\\text{rel}, y_\\text{rel}, \\theta_\\text{rel}, \\beta_\\text{rel})
+
+        2. Em seguida, definimos:
+
+           .. math::
+
+               z_1 &= x_\\text{rel} \\\\
+               z_2 &= L \\beta_\\text{rel} - \\theta_\\text{rel} \\\\
+               z_3 &= y_\\text{rel} - L^2 \\beta_\\text{rel} \\\\
+               z_4 &= \\frac{L^2 \\beta_\\text{rel}}{\\varepsilon - 1}
+
+        onde ``L`` e ``epsilon`` vêm dos parâmetros geométricos.
+        """
+        L = self.params.L
+        eps = self.params.epsilon
+
+        x_rel, y_rel, th_rel, be_rel = self._relative_error(state, goal)
+
+        z1 = x_rel
+        z2 = L * be_rel - th_rel
+        z3 = y_rel - (L ** 2) * be_rel
+        # Evitar divisão por zero se epsilon for 1 (caso degenerado)
+        denom = eps - 1.0
+        if abs(denom) < 1e-9:
+            raise ValueError("epsilon muito próximo de 1: coordenada z4 torna-se singular.")
+        z4 = (L ** 2) * be_rel / denom
+
+        return np.array([z1, z2, z3, z4], dtype=float)
+
+    # ------------------------------------------------------------------
+    # 3. Distância homogênea (custo de estado)
+    # ------------------------------------------------------------------
+    def homogeneous_distance(
+        self,
+        state: np.ndarray,
+        goal: np.ndarray,
+        q: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    ) -> float:
+        """
+        Calcula a distância homogênea (custo) entre dois estados.
+
+        A métrica utiliza coordenadas privilegiadas e pesos não-holonômicos,
+        penalizando erros em direções mais difíceis com potências adequadas.
+
+        Parameters
+        ----------
+        state : np.ndarray
+            Estado atual, ``[x, y, theta, beta]``.
+        goal : np.ndarray
+            Estado alvo, ``[x_g, y_g, theta_g, beta_g]``.
+        q : tuple of float, optional
+            Pesos dos estados no custo, ``(q1, q2, q3, q4)``.
+
+        Returns
+        -------
+        cost : float
+            Valor escalar da distância homogênea.
+
+        Fórmula
+        -------
+        Seja :math:`z = (z_1, z_2, z_3, z_4)` o vetor de coordenadas
+        privilegiadas e :math:`r = (r_1, r_2, r_3, r_4)` os pesos
+        não-holonômicos (ordens). Definimos o grau de homogeneidade ``d`` e:
+
+        .. math::
+
+            \\ell(z) = \\sum_{i=1}^4 q_i \\; |z_i|^{d / r_i}
+
+        onde tipicamente escolhemos :math:`d = 2 \\sum_i r_i`.
+
+        Intuição
+        --------
+        * Direções mais fáceis (menor :math:`r_i`) recebem expoentes maiores.
+        * Direções mais difíceis (maior :math:`r_i`) recebem expoentes menores,
+          o que as torna relativamente mais caras perto da origem.
+        """
+        z = self.privileged_coords(state, goal)
+        r = self.r
+        d = float(self.d)
+
+        cost = 0.0
+        for i in range(4):
+            exp = d / r[i]
+            cost += q[i] * (abs(z[i]) ** exp)
+        return float(math.log10(1.0 + cost))
+
+
+# ----------------------------------------------------------------------
+# Exemplo rápido de uso
+# ----------------------------------------------------------------------
+if __name__ == "__main__":
+    params = TractorTrailerParams(D=4.7, L=6.53, epsilon=0.736)
+    geom = TractorTrailerGeometry(params)
+
+    state = np.array([0.0, 0.0, 0.0, 5.00])
+    goal = np.array([0.0, 0.0, 0.0, 0.0])
+
+    z = geom.privileged_coords(state, goal)
+    dist = geom.homogeneous_distance(state, goal)
+
+    print("z =", z)
+    print("homogeneous distance =", dist)

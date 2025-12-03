@@ -17,9 +17,6 @@ class SimulationLoader:
         map = self.map_generator.generate_map()
         return Simulation(vehicle, map)
 
-
-
-
 class VehicleConfigLoader:
     """
     Utilitário para carregar a lista de veículos e suas geometrias a partir de um arquivo JSON.
@@ -81,15 +78,7 @@ class VehicleConfigLoader:
         geometry = self._get_geometry(name)
         return ArticulatedVehicle(geometry)
 
-
-
-class MapGenerator:
-
-    @abstractmethod
-    def generate_map(self) -> Map:
-        pass
-
-class DefaultMapGenerator(MapGenerator):
+class DefaultMapGenerator():
 
     MAP_WIDTH = 150.0
     MAP_HEIGHT = 150.0
@@ -141,13 +130,19 @@ class DefaultMapGenerator(MapGenerator):
             parking_lots_start_x += self.PARKING_SLOT_WIDTH
 
         ## escolhe uma das vagas para se tornar o ponto de partida e o objetivo de estacionamento
-        chosen_parking_slot = map.get_random_parking_slot()
-        chosen_parking_slot.type = MapEntity.ENTITY_PARKING_GOAL
-        map.parking_goal = chosen_parking_slot
+        #filtra as vagas por fileira (top row: y < MAP_HEIGHT/2, bottom row: y > MAP_HEIGHT/2)
+        all_parking_slots = map.get_parking_slots()
+        top_row_slots = [slot for slot in all_parking_slots if slot.position_y < self.MAP_HEIGHT / 2]
+        bottom_row_slots = [slot for slot in all_parking_slots if slot.position_y > self.MAP_HEIGHT / 2]
 
-        chosen_parking_slot = map.get_random_parking_slot()
-        chosen_parking_slot.type = MapEntity.ENTITY_START
-        map.start_position = chosen_parking_slot
+        # goal sempre na fileira de cima, start sempre na fileira de baixo
+        chosen_goal_slot = random.choice(top_row_slots)
+        chosen_goal_slot.type = MapEntity.ENTITY_PARKING_GOAL
+        map.parking_goal = chosen_goal_slot
+
+        chosen_start_slot = random.choice(bottom_row_slots)
+        chosen_start_slot.type = MapEntity.ENTITY_START
+        map.start_position = chosen_start_slot
 
         # adiciona carros aleatoriamente nas vagas (exceto a vaga de destino e a vaga de partida)
         for parking_slot in map.get_parking_slots():

@@ -539,10 +539,14 @@ class TractorTrailerGeometry:
         self,
         state: np.ndarray,
         goal: np.ndarray,
-        q: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+        q: Tuple[float, float, float, float] = (1.0, 2.0, 2.0, 2.0),
     ) -> float:
         """
-        Calcula a distância homogênea (custo) entre dois estados.
+        Calcula a norma homogênea (distância) entre dois estados.
+        
+        Retorna a raiz d-ésima do polinômio homogêneo, garantindo que a métrica
+        escale linearmente com a magnitude do erro (como uma distância Euclidiana),
+        em vez de crescer exponencialmente com o grau d.
 
         A métrica utiliza coordenadas privilegiadas e pesos não-holonômicos,
         penalizando erros em direções mais difíceis com potências adequadas.
@@ -587,7 +591,9 @@ class TractorTrailerGeometry:
         for i in range(4):
             exp = d / r[i]
             cost += q[i] * (abs(z[i]) ** exp)
-        return float(math.log10(1.0 + cost))
+            
+        # NORMALIZAÇÃO HOMOGENEA: ao inves de log10, retornamos a raiz d-ésima (potência 1/d).
+        return  cost ** (1.0 / d)
 
 
 # ----------------------------------------------------------------------

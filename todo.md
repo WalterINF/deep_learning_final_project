@@ -9,6 +9,7 @@
 - [X] considerar normalização de coordenadas privilegiadas
 - [X] mudar scripts de avaliação e treino para aceitar argumentos de linha de comando
 - [ ] elaborar notebook estruturado e bem documentado
+- [X] mudança no calculo do custo da heuristica nao-holonômica para usar normalização homogênea
 
 
 - atentar ao sinal do epsilon (negativo no nosso caso)

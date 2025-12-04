@@ -6,6 +6,7 @@ Uses tensorboard's EventAccumulator to read event files.
 
 import os
 import sys
+import re
 import pathlib
 import argparse
 from collections import defaultdict
@@ -20,18 +21,22 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 LOG_DIR = PROJECT_ROOT / "logs"
 OUTPUT_DIR = PROJECT_ROOT / "plots"
 
-# Experiment name mapping for display
-EXPERIMENT_NAME_MAP = {
-    "SAC_Improved_V6_0": "SAC_baseline",
-    "SAC_Improved_V8_0": "SAC_euclidean",
-    "SAC_Improved_V9_0": "SAC_bfs",
-}
-
 # Default experiments to plot (if None, plot all)
-DEFAULT_EXPERIMENTS = list(EXPERIMENT_NAME_MAP.keys())
+DEFAULT_EXPERIMENTS = None
 
 # X-axis cutoff (in steps). Set to None for no cutoff.
 X_AXIS_CUTOFF = 3_500_000
+
+
+def generate_alias(experiment_name: str) -> str:
+    """Generate a display alias by removing all numbers and hyphens from the experiment name."""
+    # Remove all digits and hyphens
+    alias = re.sub(r'[\d\-]', '', experiment_name)
+    # Clean up multiple consecutive underscores
+    alias = re.sub(r'_+', '_', alias)
+    # Remove leading/trailing underscores
+    alias = alias.strip('_')
+    return alias
 
 # Auto-save plots
 AUTO_SAVE_PLOTS = True
@@ -299,8 +304,8 @@ def main():
         try:
             metrics = load_tensorboard_logs(exp_dir)
             if metrics:
-                # Use display name from mapping, or original name if not in mapping
-                display_name = EXPERIMENT_NAME_MAP.get(exp_dir.name, exp_dir.name)
+                # Auto-generate display name by removing numbers and hyphens
+                display_name = generate_alias(exp_dir.name)
                 experiments_data[display_name] = metrics
                 print(f"  Loaded {exp_dir.name} as '{display_name}': {len(metrics)} metrics")
         except Exception as e:

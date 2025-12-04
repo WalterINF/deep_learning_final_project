@@ -5,6 +5,7 @@ import src.Visualization as Visualization
 from typing import Any, SupportsFloat, Tuple, NamedTuple
 import math
 from dataclasses import dataclass
+import rsplan  # Biblioteca para cálculo de caminhos Reeds-Shepp
 
 
 class ParkingEnv(gym.Env):
@@ -32,14 +33,19 @@ class ParkingEnv(gym.Env):
     PUNISHMENT_JACKKNIFE = -100.0 # penalidade por jackknife
 
     ## heuristicas
-    HEURSITICAS_DISPONIVEIS = {"nao_holonomica", "euclidiana", "manhattan", "nenhuma"}
+    HEURSITICAS_DISPONIVEIS = {"nao_holonomica", "euclidiana", "manhattan", "reeds_shepp", "nenhuma"}
+    
+    ## Reeds-Shepp: raio mínimo de curvatura (baseado no ângulo máximo de esterçamento e wheelbase)
+    # r_min = wheelbase / tan(steering_angle_max)
+    # Usando D (wheelbase do trator) = 4.7m e steering_limit = 28°
+    REEDS_SHEPP_TURN_RADIUS = 4.7 / np.tan(np.deg2rad(28.0))  # ~8.85m
 
     def __init__(self, seed: int = 0, heuristica: str = "nao_holonomica"):
         """
         Inicializa o ambiente de estacionamento.
 
         :param seed: Semente para o ambiente.
-        :param heuristica: Heurística de distância a ser usada (nao_holonomica, euclidiana, manhattan, nenhuma)
+        :param heuristica: Heurística de distância a ser usada (nao_holonomica, euclidiana, manhattan, reeds_shepp, nenhuma)
         """
         if heuristica not in self.HEURSITICAS_DISPONIVEIS:
             raise ValueError(f"Heurística inválida: {heuristica}")
@@ -216,6 +222,8 @@ class ParkingEnv(gym.Env):
             return self._calculate_distance_euclidean(self.simulation.vehicle.get_tractor_position(), self.simulation.map.get_parking_goal_position())
         elif heuristic == "manhattan":
             return self._calculate_distance_manhattan(self.simulation.vehicle.get_tractor_position(), self.simulation.map.get_parking_goal_position())
+        elif heuristic == "reeds_shepp":
+            return self._calculate_reeds_shepp_distance()
         elif heuristic == "nenhuma":
             return 0.0
         else:
@@ -277,6 +285,52 @@ class ParkingEnv(gym.Env):
             state=tractor_state,
             goal=goal_state,
         )
+
+    def _calculate_reeds_shepp_distance(self) -> float:
+        """
+        Calcula a distância de Reeds-Shepp entre a posição atual do REBOQUE e a vaga de estacionamento.
+        
+        A curva de Reeds-Shepp considera que o veículo pode andar para frente e para trás,
+        respeitando um raio mínimo de curvatura. É mais realista que a distância euclidiana
+        para veículos não-holonômicos.
+        
+        Returns
+        -------
+        float
+            Comprimento total do caminho ótimo de Reeds-Shepp em metros.
+        """
+        # Posição e orientação atual do REBOQUE (trailer)
+        trailer_pos = self.simulation.vehicle.get_trailer_position()
+        trailer_theta = self.simulation.vehicle.get_trailer_theta()
+        
+        # Objetivo: posição e orientação da vaga
+        goal_pos = self.simulation.map.get_parking_goal_position()
+        goal_theta = self.simulation.map.get_parking_goal_theta()
+        
+        # Ajuste: o reboque deve apontar para "dentro" da vaga (180° do goal_theta padrão)
+        # pois o trailer entra de ré
+        adjusted_trailer_theta = self._normalize_angle(trailer_theta - math.pi)
+        
+        # Poses no formato (x, y, yaw) em radianos
+        start_pose = (trailer_pos[0], trailer_pos[1], adjusted_trailer_theta)
+        goal_pose = (goal_pos[0], goal_pos[1], goal_theta)
+        
+        # Calcula o caminho de Reeds-Shepp
+        # rsplan.path requer: start_pose, end_pose, turn_radius, runway_length, step_size
+        rs_path = rsplan.path(
+            start_pose, 
+            goal_pose, 
+            self.REEDS_SHEPP_TURN_RADIUS,
+            runway_length=0.0,  # sem pista de runway no final
+            step_size=0.5       # resolução de 0.5m para discretização do caminho
+        )
+        
+        # Retorna o comprimento total do caminho
+        if rs_path is None:
+            # Fallback para euclidiana caso não encontre caminho (muito raro)
+            return self._calculate_distance_euclidean(trailer_pos, goal_pos)
+        
+        return rs_path.total_length
         
 
 
@@ -539,7 +593,7 @@ class TractorTrailerGeometry:
         self,
         state: np.ndarray,
         goal: np.ndarray,
-        q: Tuple[float, float, float, float] = (1.0, 2.0, 2.0, 2.0),
+        q: Tuple[float, float, float, float] = (5.0, 1.0, 1.0, 1.0),
     ) -> float:
         """
         Calcula a norma homogênea (distância) entre dois estados.

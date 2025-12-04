@@ -375,7 +375,7 @@ class Vehicle():
         - theta: ângulo de orientação do veículo
         - beta: ângulo de articulação do veículo
         """
-        return np.array([self.position_x_trator, self.position_y_trator, self.get_tractor_theta(), self.get_tractor_beta()])
+        return np.array([self.get_trailer_position()[0], self.get_trailer_position()[1], self.get_trailer_theta(), self.get_tractor_beta()])
 
     def get_tractor_wheelbase(self) -> float:
         """retorna a distância entre eixos do trator"""
@@ -443,6 +443,16 @@ class Vehicle():
         rear_axle_y = joint_y - self.distancia_eixo_traseiro_trailer_quinta_roda * math.sin(theta_trailer)
 
         return rear_axle_x, rear_axle_y
+
+    def get_trailer_state(self) -> np.ndarray:
+        """retorna o estado do trailer como um array numpy, 
+        o estado é dado por: [x, y, theta] (radianos), onde:
+        - x: posição x do trailer
+        - y: posição y do trailer
+        - theta: ângulo de orientação do trailer
+        - beta: ângulo de articulação do trailer
+        """
+        return np.array([self.get_trailer_position()[0], self.get_trailer_position()[1], self.get_trailer_theta(), self.get_tractor_beta()])
 
     def get_bounding_box_trailer(self) -> BoundingBox:
         """

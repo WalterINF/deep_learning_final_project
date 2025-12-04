@@ -28,7 +28,7 @@ except ModuleNotFoundError:
     from src.ParkingEnv import ParkingEnv  # when running from within src/
 
 # Heurísticas disponíveis
-HEURISTICS = ["nao_holonomica", "euclidiana", "manhattan", "nenhuma"]
+HEURISTICS = ["nao_holonomica", "euclidiana", "manhattan", "reeds_shepp", "nenhuma"]
 
 def get_physical_cores():
     """Retorna o número de núcleos físicos (não threads) do sistema."""

@@ -5,7 +5,6 @@ import src.Visualization as Visualization
 from typing import Any, SupportsFloat, Tuple, NamedTuple
 import math
 from dataclasses import dataclass
-import numba as nb
 
 
 class ParkingEnv(gym.Env):
@@ -202,7 +201,6 @@ class ParkingEnv(gym.Env):
             self.simulation,
             img_size=(320, 320),
             distance_map=None,
-            grid_resolution=self.GRID_RESOLUTION,
             observation=self._build_observation(),
             heuristic_value=self._calculate_heuristic_value(self.heuristica)
         )

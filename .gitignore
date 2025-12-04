@@ -207,10 +207,15 @@ marimo/_lsp/
 __marimo__/
 
 
+
+
 # video
 video/*
 
 # Ignorar logs e replay buffers de RL
 POLIheurisTICA/rl_fast/logs/
-**/*.pkl
 **/replay_buffer*
+
+
+# ignorar monitor.csv
+logs/monitor.csv

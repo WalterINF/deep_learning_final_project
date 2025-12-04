@@ -13,7 +13,6 @@ class ParkingEnv(gym.Env):
     metadata = {"render_modes": ["rgb_array"], "render_fps": 24}
 
     ## ambiente
-    GRID_RESOLUTION = 1.0  # Resolução do grid em metros para o pathfinding
     SENSOR_RANGE_M = 50.0 # raio do sensor
     SPEED_LIMIT_MS = 5.0 # velocidade maxima
     STEERING_LIMIT_RAD = float(np.deg2rad(28.0)) # angulo maximo de esterçamento
@@ -26,7 +25,7 @@ class ParkingEnv(gym.Env):
 
     ## recompensas
     REWARD_GOAL = 100.0 # recompensa por chegar ao objetivo 
-    REWARD_PROGRESS_MULTIPLIER = 1.0 # multiplicador da recompensa da heurística 
+    REWARD_PROGRESS_MULTIPLIER = 2.0 # multiplicador da recompensa da heurística 
     MAX_PUNISHMENT_TIME_PER_EPISODE = -10.0 # penalidade maxima por tempo 
     PUNISHMENT_TIME = MAX_PUNISHMENT_TIME_PER_EPISODE / MAX_STEPS # penalidade por tempo a cada passo
     PUNISHMENT_ZERO_SPEED = -0.1 # penalidade por velocidade zero 
@@ -138,7 +137,7 @@ class ParkingEnv(gym.Env):
         desired_state = [
             self.simulation.map.get_parking_goal_position()[0], 
             self.simulation.map.get_parking_goal_position()[1], 
-            self.simulation.map.get_parking_goal_theta(),
+            -self.simulation.map.get_parking_goal_theta(),
             0.0] # phi_d = 0
 
         privileged_coordinates = self.tractor_trailer_geometry.privileged_coords(

@@ -25,7 +25,7 @@ OUTPUT_DIR = PROJECT_ROOT / "plots"
 DEFAULT_EXPERIMENTS = None
 
 # X-axis cutoff (in steps). Set to None for no cutoff.
-X_AXIS_CUTOFF = 3_500_000
+X_AXIS_CUTOFF = 4000000
 
 
 def generate_alias(experiment_name: str) -> str:

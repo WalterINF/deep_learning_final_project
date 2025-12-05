@@ -86,6 +86,12 @@ python eval.py --model-name <model-name>
 ```
 Onde model-name é o nome do modelo treinado. Se nenhum nome for fornecido, o modelo mais recente será avaliado.
 
+6. (OPCIONAL) Plotar os logs do TensorBoard:
+```bash
+python scripts/plot_tensorboard_logs.py
+```
+Os gráficos serão salvos em plots/
+
 
 
 

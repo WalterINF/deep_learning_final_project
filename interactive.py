@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """
-Interactive Parking Environment Controller
+Ambiente interativo de estacionamento de veículos articulados.
 
-Use arrow keys to control the vehicle:
-  UP    - Accelerate forward
-  DOWN  - Accelerate backward (reverse)
-  LEFT  - Steer left
-  RIGHT - Steer right
-  
-  R     - Reset environment
-  Q/ESC - Quit
+Comtroles:
+    UP    - Acelerar para frente
+    DOWN  - Acelerar para trás
+    LEFT  - Esterçar para a esquerda
+    RIGHT - Esterçar para a direita
+    R     - Resetar o ambiente
+    Q/ESC - Sair
 
-The environment updates automatically every dt seconds.
+O ambiente atualiza automaticamente a cada dt segundos.
 """
 
 import cv2
@@ -21,20 +20,17 @@ from src.ParkingEnv import ParkingEnv
 
 
 def main():
-    # Create environment
     env = ParkingEnv(heuristica="reeds_shepp")
     obs, info = env.reset()
     
-    # Control parameters
     velocity = 0.0
     steering = 0.0
-    velocity_step = 1.0  # m/s per keypress
-    steering_step = np.deg2rad(5.0)  # radians per keypress
+    velocity_step = 1.0
+    steering_step = np.deg2rad(5.0)
     
-    # Limits from environment
     max_velocity = env.SPEED_LIMIT_MS
     max_steering = env.STEERING_LIMIT_RAD
-    dt = env.DT  # Simulation timestep in seconds
+    dt = env.DT
     
     print(__doc__)
     print(f"Velocity range: [{-max_velocity:.1f}, {max_velocity:.1f}] m/s")
@@ -42,13 +38,10 @@ def main():
     print(f"Update interval: {dt:.2f} seconds")
     print()
     
-    # Initial render
     frame = env.render()
-    # Convert list[list[list[int]]] to numpy array
     frame = np.array(frame, dtype=np.uint8)
     frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
     
-    # Scale up for better visibility
     scale = 2
     frame_scaled = cv2.resize(frame_bgr, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
     
@@ -112,13 +105,10 @@ def main():
                 print(f"Total steps: {step_count}, Total reward: {total_reward:.2f}")
                 print("Press 'R' to reset or 'Q' to quit")
         
-        # Render current state (always render, even if episode ended)
         frame = env.render()
-        # Convert list[list[list[int]]] to numpy array
         frame = np.array(frame, dtype=np.uint8)
         frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         
-        # Add HUD overlay
         hud_frame = frame_bgr.copy()
         cv2.putText(hud_frame, f"V: {velocity:+.1f}", (5, 15), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
@@ -130,7 +120,6 @@ def main():
             cv2.putText(hud_frame, "EPISODE ENDED", (5, 60), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
         
-        # Scale up for better visibility
         frame_scaled = cv2.resize(hud_frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
         
         cv2.imshow("Parking Environment", frame_scaled)

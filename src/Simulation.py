@@ -251,12 +251,21 @@ class Vehicle():
     raycast_positions_and_angle_offsets = [
        # (nome,   origem,    ângulo de offset)
         ("r1", "tractor", 0.0), # 0 graus
-        ("r2", "tractor", math.pi/4), # 45 graus
-        ("r3", "tractor", math.pi/2), # 90 graus
-        ("r4", "tractor", 3*math.pi/4), # 135 graus
-        ("r5", "tractor", -3*math.pi/4), # -135 graus
-        ("r6", "tractor", -math.pi/2), # -90 graus
-        ("r7", "tractor", -math.pi/4), # -45 graus
+        ("r2", "tractor", np.deg2rad(45)), # 45 graus
+        ("r3", "tractor", np.deg2rad(90)), # 90 graus
+        ("r4", "tractor", np.deg2rad(135)), # 135 graus
+        ("r5", "tractor", np.deg2rad(-135)), # -135 graus
+        ("r6", "tractor", np.deg2rad(-90)), # -90 graus
+        ("r7", "tractor", np.deg2rad(-45)), # -45 graus
+
+        ("r8", "trailer", np.deg2rad(45)), # 45 graus
+        ("r9", "trailer", np.deg2rad(90)), # 90 graus
+        ("r10", "trailer", np.deg2rad(135)), # 135 graus
+        ("r11", "trailer", np.deg2rad(-135)), # -135 graus
+        ("r12", "trailer", np.deg2rad(-90)), # -90 graus
+        ("r13", "trailer", np.deg2rad(-45)), # -45 graus
+        ("r14", "trailer", np.deg2rad(180)), # 180 graus
+        
     ]
 
 
@@ -297,7 +306,8 @@ class Vehicle():
     def update_raycasts(self, entities: list[MapEntity]):
         center_position = self.get_tractor_center_position()
         vehicle_theta = self.get_tractor_theta()
-        
+        trailer_position_x = self.get_trailer_position()[0]
+        trailer_position_y = self.get_trailer_position()[1]
         for raycast_name, origin_point, angle_offset in self.raycast_positions_and_angle_offsets:
             # dispara os raycasts e armazena os resultados
             if origin_point == "tractor":
@@ -305,6 +315,14 @@ class Vehicle():
                     center_position[0], 
                     center_position[1], 
                     vehicle_theta + angle_offset, 
+                    self.MAX_RAYCAST_LENGTH, 
+                    entities)
+
+            elif origin_point == "trailer":
+                self.raycast_results[raycast_name] = fire_raycast(
+                    trailer_position_x, 
+                    trailer_position_y, 
+                    self.get_trailer_theta() + angle_offset, 
                     self.MAX_RAYCAST_LENGTH, 
                     entities)
 
@@ -316,7 +334,7 @@ class Vehicle():
         return self.get_tractor_position()[0] + math.cos(self.get_tractor_theta()) * self.get_tractor_length()/2, self.get_tractor_position()[1] + math.sin(self.get_tractor_theta()) * self.get_tractor_length()/2
 
     def get_raycast_count(self) -> int:
-        return len(self.raycast_positions_and_angle_offsets)
+        return len(self.raycast_positions_and_angle_offsets) - 7
 
     def get_raycast_lengths(self) -> list[float]:
         """
@@ -336,7 +354,8 @@ class Vehicle():
             # Comprimento do raycast
             raycast_lengths.append(result.length)
 
-        return raycast_lengths
+        #return only first 7 raycast lengths
+        return raycast_lengths[:7]
 
     # ===================== métodos para do o TRATOR =====================
 

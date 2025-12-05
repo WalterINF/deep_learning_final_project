@@ -3,12 +3,17 @@ imageio-ffmpeg
 pygame
 casadi
 stable-baselines3
-tensorboard
 stable-baselines3[extra]
+tensorboard
 gymnasium
 gymnasium[other]
-numerize
-pathlib
+numpy
+torch
+matplotlib
+Pillow
+opencv-python
+rsplan
+psutil
 pyvirtualdisplay
 ipywidgets
 

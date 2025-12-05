@@ -25,7 +25,7 @@ class ParkingEnv(gym.Env):
 
     ## recompensas
     REWARD_GOAL = 100.0 # recompensa por chegar ao objetivo 
-    REWARD_PROGRESS_MULTIPLIER = 2.0 # multiplicador da recompensa da heurística 
+    REWARD_PROGRESS_MULTIPLIER = 1.0 # multiplicador da recompensa da heurística 
     MAX_PUNISHMENT_TIME_PER_EPISODE = -10.0 # penalidade maxima por tempo 
     PUNISHMENT_TIME = MAX_PUNISHMENT_TIME_PER_EPISODE / MAX_STEPS # penalidade por tempo a cada passo
     PUNISHMENT_ZERO_SPEED = -0.1 # penalidade por velocidade zero 
@@ -66,16 +66,22 @@ class ParkingEnv(gym.Env):
         self.initial_distance_to_goal = self._calculate_heuristic_value(self.heuristica)
         self.last_distance_to_goal = self.initial_distance_to_goal
 
-        # o estado  bruto é x = [x1, y1, θ1, θ2]
-        # L é o comprimento da barra de reboque
-        # z(x) = [
-        # (x_1-x_g)*cos(theta_1g) + (y_1-y_g)*sin(theta_1g),
-        # (theta_1 - theta_1g),
-        # −(x_1 − x_g ) sin theta_1g + (y_1 − y_g ) cos theta_1g
-        # z3 − L · sin(z2 − (theta_2 − theta_2g ))]
-        # z = [z1, z2, z3, z4] 
-        # Espaço de observação k = [z/z_normalizado], onde k é o vetor de erro normalizado
-        # + O_local: percepção local dos obstáculos - 14 sensores raycast posicionados ao redor do veículo
+
+        # As coordenadas privilegiadas são um sistema de coordenadas
+        #adaptado à estrutura não-holonômica do sistema. Para o modelo
+        #trator-reboque simples, usamos uma forma inspirada na literatura
+        #e em exemplos de carros não-holonômicos:
+
+        #1. Primeiro calculamos o erro relativo:
+        #       (x_rel, y_rel, theta_rel, beta_rel)
+
+        #2. Em seguida, definimos:
+        #       z_1 = x_rel
+        #       z_2 = L * beta_rel - theta_rel
+        #       z_3 = y_rel - L^2 * beta_rel
+        #       z_4 = L^2 * beta_rel / (epsilon - 1)
+        # onde L e epsilon vêm dos parâmetros geométricos.
+        # O espaço de observação é dado por: [z_1, z_2, z_3, z_4] + O_local: percepção local dos obstáculos - 14 sensores raycast posicionados ao redor do veículo
         
         obs_low = np.array(
             [
@@ -188,7 +194,6 @@ class ParkingEnv(gym.Env):
             terminated = True 
             reward = self.PUNISHMENT_COLLISION
 
-        # recompensa por progresso baseada na heurística
         new_distance_to_goal = self._calculate_heuristic_value(self.heuristica)
         reward += (self.last_distance_to_goal - new_distance_to_goal) * self.REWARD_PROGRESS_MULTIPLIER
         self.last_distance_to_goal = new_distance_to_goal

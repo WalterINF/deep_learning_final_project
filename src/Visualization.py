@@ -209,12 +209,6 @@ def to_rgb_array(
             z4_surface = font.render(z4_text, True, (0, 0, 0))
             surface.blit(z4_surface, (10, 110))
 
-        if observation is not None:
-            for i in range(4, 4 + len(observation) - 4):
-                raycast_text = f"Raycast {i - 4}: {observation[i]:.2f}"
-                raycast_surface = font.render(raycast_text, True, (0, 0, 0))
-                surface.blit(raycast_surface, (10, 175 + i*15 - 4 * 20))
-
         if heuristic_value is not None:
             heuristic_text = f"Heuristic: {heuristic_value:.2f}"
             raycast_surface = font.render(heuristic_text, True, (0, 0, 0))
